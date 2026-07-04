@@ -1,0 +1,43 @@
+tokens:
+  prefix: "{theme}FoAutoCollect &8» {muted}"
+  theme: "#03fc88"
+  muted: "#a7b8b0"
+  white: "#ffffff"
+  yellow: "#ffd966"
+  good: "#3ecf8e"
+  bad: "#ff5d73"
+
+messages:
+  no-permission: "{prefix} {bad}You don't have permission."
+  players-only: "{prefix} {bad}Only players can run this command."
+  unknown-subcommand: "{prefix} {bad}Unknown subcommand: {theme}{arg}{bad}."
+
+  toggle-enabled: "{prefix} {good}Auto collect enabled."
+  toggle-disabled: "{prefix} {bad}Auto collect disabled."
+  toggle-forced: "{prefix} {muted}Auto collect is forced {good}enabled {muted}for everyone."
+  status-enabled: "{prefix} {muted}Auto collect is {good}enabled{muted}."
+  status-disabled: "{prefix} {muted}Auto collect is {bad}disabled{muted}."
+
+  help-header: "{prefix} {muted}Available commands:"
+  help-version: "{prefix} {theme}/foautocollectadmin version {muted}- show plugin info and check Modrinth"
+  help-reload: "{prefix} {theme}/foautocollectadmin reload {muted}- reload config and messages"
+  help-editor: "{prefix} {theme}/foautocollectadmin editor {muted}- open editor GUI"
+  help-set: "{prefix} {theme}/foautocollectadmin set <player> <on|off> {muted}- set a player's session state"
+  help-force: "{prefix} {theme}/foautocollectadmin force <on|off|status> {muted}- control forced auto collect"
+
+  reloaded: "{prefix} {good}Reloaded config and messages."
+  player-not-found: "{prefix} {bad}That player is not online."
+  admin-set-enabled: "{prefix} {good}Set {theme}{player}{good}'s auto collect to enabled."
+  admin-set-disabled: "{prefix} {bad}Set {theme}{player}{bad}'s auto collect to disabled."
+  admin-force-state: "{prefix} {muted}Force enabled is {state}{muted}."
+  admin-force-usage: "{prefix} {muted}Use {theme}/foautocollectadmin force on {muted}or {theme}off {muted}to toggle it."
+  admin-force-enabled: "{prefix} {good}Forced auto collect is now enabled for everyone."
+  admin-force-disabled: "{prefix} {bad}Forced auto collect is now disabled."
+  invalid-state: "{prefix} {bad}Use {theme}on {bad}or {theme}off{bad}."
+  invalid-force-state: "{prefix} {bad}Use {theme}on{bad}, {theme}off{bad}, or {theme}status{bad}."
+  inventory-full-actionbar: "{bad}Inventory full."
+
+  editor-saved: "{prefix} {good}Saved {theme}{setting}{good}."
+  editor-added: "{prefix} {good}Added {theme}{value}{good}."
+  editor-removed: "{prefix} {bad}Removed {theme}{value}{bad}."
+  prompt-cancelled: "{prefix} {bad}Input cancelled."

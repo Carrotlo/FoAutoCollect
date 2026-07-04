@@ -1,0 +1,79 @@
+# If true, everyone is treated as enabled and personal toggles are ignored.
+force-enabled: false
+
+# Players who have not toggled in the current server session use this value.
+default-enabled: false
+
+native-dialogs:
+  # Uses Minecraft's native dialog/input screens for editor search input when supported.
+  # Requires a compatible Paper or Paper-fork server with the Dialog API.
+  # Spigot and older versions automatically fall back to chat input mode.
+  # Set this to false to always use chat input.
+  enabled: true
+
+  # Sends admins a short warning when native dialogs are enabled but unavailable and chat fallback is used.
+  warn-on-fallback: true
+
+# World list behavior, used by every section below:
+# - enabled-worlds: [] means the section can run in every world.
+# - enabled-worlds with names means the section only runs in those worlds.
+# - disabled-worlds always wins over enabled-worlds.
+# The editor world picker writes real loaded world names into these lists.
+#
+# FoDrops integration:
+# FoAutoCollect listens for FoDrops' FoDropRewardEvent when FoDrops is installed.
+# Compatible FoDrops item rewards are collected directly and safely; spawned-item
+# radius guessing is intentionally not used.
+auto-collect:
+  block-break:
+    # Covers vanilla block drops, block XP, crop drops, and matching FoDrops block rewards.
+    enabled: true
+    collect-drops: true
+    collect-experience: true
+    enabled-worlds: []
+    disabled-worlds: []
+    disabled-blocks: []
+
+  mob-kills:
+    # Covers vanilla mob death drops/XP and matching FoDrops mob rewards.
+    enabled: true
+    collect-drops: true
+    collect-experience: true
+    enabled-worlds: []
+    disabled-worlds: []
+    disabled-mobs: []
+
+  fishing:
+    # Covers vanilla caught item/XP and matching FoDrops fishing rewards.
+    enabled: true
+    collect-drops: true
+    collect-experience: true
+    enabled-worlds: []
+    disabled-worlds: []
+
+  shearing:
+    # Covers vanilla shearing item drops and matching FoDrops shearing rewards.
+    enabled: true
+    collect-drops: true
+    enabled-worlds: []
+    disabled-worlds: []
+
+  explosions:
+    # Vanilla explosions do not always have a safe player owner.
+    # Player-owned vanilla/FoDrops explosion rewards are collected when safely attributable.
+    enabled: true
+    collect-drops: true
+    # Explosions above this broken-block count are left vanilla to avoid TNT-spam overhead.
+    max-blocks-per-explosion: 512
+    # Caps recent player-owned explosion tracking. Oldest tracked entries are dropped first.
+    max-tracked-explosions: 64
+    enabled-worlds: []
+    disabled-worlds: []
+
+full-inventory:
+  # DROP_OVERFLOW drops leftover items at the source.
+  # BLOCK_COLLECTION leaves drops on the ground if everything cannot fit.
+  # Actionbar and sound are warnings for either overflow or blocked collection.
+  mode: DROP_OVERFLOW
+  actionbar: true
+  sound: true

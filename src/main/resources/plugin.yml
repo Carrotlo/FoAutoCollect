@@ -1,0 +1,27 @@
+name: FoAutoCollect
+description: Automatic item and experience collection for player-owned drops and rewards.
+version: '${version}'
+
+main: me.foesio.foAutoCollect.FoAutoCollect
+api-version: '1.21'
+
+authors: [ Carrotio ]
+softdepend: [ FoDrops, PlaceholderAPI ]
+
+commands:
+  foautocollect:
+    description: Toggle auto collect for yourself.
+    usage: /<command> [status|on|off]
+    aliases: [ autocollect ]
+  foautocollectadmin:
+    description: Admin tools for FoAutoCollect.
+    usage: /<command> <version|reload|editor|set|force>
+    aliases: [ autocollectadmin ]
+
+permissions:
+  foautocollect.use:
+    description: Allows toggling personal auto collect.
+    default: true
+  foautocollect.admin:
+    description: Allows access to FoAutoCollect admin commands and editor.
+    default: op
