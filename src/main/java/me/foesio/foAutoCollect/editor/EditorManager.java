@@ -4,6 +4,7 @@ import me.foesio.core.dialog.DialogButton;
 import me.foesio.core.dialog.TextDialogRequest;
 import me.foesio.core.editor.EditorDialogInputs;
 import me.foesio.core.editor.EditorItemFactory;
+import me.foesio.core.gui.GuiButtonConfig;
 import me.foesio.core.material.MaterialChooserClick;
 import me.foesio.core.material.MaterialChooserHolder;
 import me.foesio.core.material.MaterialChooserMenus;
@@ -53,6 +54,8 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
 public class EditorManager implements Listener {
+    private static final GuiButtonConfig GUI_BUTTONS = GuiButtonConfig.defaults();
+
     private final FoAutoCollect plugin;
     private final ItemStack backgroundFiller;
     private final Map<UUID, SectionType> disabledPickerSections = new ConcurrentHashMap<>();
@@ -208,7 +211,7 @@ public class EditorManager implements Listener {
             getWorldList(section, WorldListType.DISABLED).size(),
             "Enabled"
         ));
-        inventory.setItem(49, plugin.getGuiButtons().back());
+        inventory.setItem(49, GUI_BUTTONS.back());
 
         fillBackground(inventory);
         player.openInventory(inventory);
@@ -226,7 +229,7 @@ public class EditorManager implements Listener {
                 .mode(MaterialChooserMode.DISABLED_TOGGLE)
                 .page(page)
                 .filter(filter)
-                .buttons(plugin.getGuiButtons())
+                .buttons(GUI_BUTTONS)
                 .availableMaterials(MaterialTypes.allBlocks())
                 .selectedMaterials(MaterialSelections.fromKeys(getDisabledList(section)))
                 .build());
@@ -238,7 +241,7 @@ public class EditorManager implements Listener {
             .mode(MobChooserMode.DISABLED_TOGGLE)
             .page(page)
             .filter(filter)
-            .buttons(plugin.getGuiButtons())
+            .buttons(GUI_BUTTONS)
             .availableTypes(MobTypes.allLiving())
             .selectedTypes(MobSelections.fromKeys(getDisabledList(section)))
             .build());

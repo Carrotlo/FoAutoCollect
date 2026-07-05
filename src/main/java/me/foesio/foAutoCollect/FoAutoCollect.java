@@ -17,14 +17,11 @@ import me.foesio.core.command.CommandVisibilityService;
 import me.foesio.core.config.ConfigValueLists;
 import me.foesio.core.config.ResourceFiles;
 import me.foesio.core.dialog.DialogService;
-import me.foesio.core.gui.GuiButtonConfig;
 import me.foesio.core.inventory.InventoryCloseSuppressor;
 import me.foesio.core.inventory.InventoryDepositService;
 import me.foesio.core.inventory.OverflowPolicy;
 import me.foesio.core.message.FoMessageService;
 import me.foesio.core.reload.FoReloadRegistry;
-import me.foesio.core.update.ModrinthUpdateChecker;
-import me.foesio.core.update.UpdateCheckResult;
 import me.foesio.core.update.UpdateNoticeService;
 import me.foesio.foAutoCollect.command.AutoCollectAdminCommand;
 import me.foesio.foAutoCollect.command.AutoCollectCommand;
@@ -90,6 +87,8 @@ public final class FoAutoCollect extends JavaPlugin {
     public void onEnable() {
         saveDefaultConfig();
         getConfig().options().copyDefaults(true);
+        getConfig().set("gui-titles", null);
+        getConfig().set("gui-buttons", null);
         getConfig().set("update-checker", null);
         saveConfig();
         reloadMessages();
@@ -114,7 +113,7 @@ public final class FoAutoCollect extends JavaPlugin {
             .register();
         FoDropsRewardBridge foDropsRewardBridge = new FoDropsRewardBridge(this, autoCollectListener);
         foDropsRewardBridge.register();
-        UpdateNoticeService updates = startUpdateNotices();
+        UpdateNoticeService updates = core.createUpdateNotices(messages, MODRINTH_PROJECT_ID).start();
 
         AutoCollectCommand userCommand = new AutoCollectCommand(this);
         if (getCommand("foautocollect") != null) {
@@ -391,12 +390,7 @@ public final class FoAutoCollect extends JavaPlugin {
     }
 
     public String getGuiTitle(String key, String fallback, String... placeholders) {
-        String template = getConfig().getString("gui-titles." + key, fallback);
-        return format(template, placeholders);
-    }
-
-    public GuiButtonConfig getGuiButtons() {
-        return GuiButtonConfig.from(this);
+        return format(fallback, placeholders);
     }
 
     public String format(String template, String... placeholders) {
@@ -509,33 +503,6 @@ public final class FoAutoCollect extends JavaPlugin {
             .togglePie("shearing_enabled", () -> shearingEnabled)
             .togglePie("explosions_enabled", () -> explosionsEnabled)
             .simplePie("full_inventory_mode", () -> fullInventoryPolicy.name().toLowerCase(Locale.ROOT));
-    }
-
-    private UpdateNoticeService startUpdateNotices() {
-        UpdateNoticeService updateNoticeService = UpdateNoticeService.builder(this, messages)
-            .checker(new ModrinthUpdateChecker(MODRINTH_PROJECT_ID))
-            .permission("foautocollect.admin")
-            .joinDelayTicks(40L)
-            .build();
-        updateNoticeService.registerJoinListener();
-        updateNoticeService.checkAsync().thenAccept(this::logStartupUpdateResult);
-        return updateNoticeService;
-    }
-
-    private void logStartupUpdateResult(UpdateCheckResult result) {
-        if (result == null || !isEnabled()) {
-            return;
-        }
-        if (!result.successful()) {
-            getLogger().warning("Update check failed: " + result.errorMessage());
-            return;
-        }
-        if (result.updateAvailable()) {
-            getLogger().warning("A new FoAutoCollect version is available on Modrinth: "
-                + result.latestVersion() + " (current: " + result.currentVersion() + ").");
-            return;
-        }
-        getLogger().info("FoAutoCollect is up to date (" + result.currentVersion() + ").");
     }
 
     private Map<String, String> placeholders(String... placeholders) {
