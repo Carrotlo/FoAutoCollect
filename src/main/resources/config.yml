@@ -1,3 +1,5 @@
+# Need help or want support? Join the Discord: https://discord.gg/kEF77QCfu7
+
 # If true, everyone is treated as enabled and personal toggles are ignored.
 force-enabled: false
 
@@ -73,7 +75,6 @@ auto-collect:
 full-inventory:
   # DROP_OVERFLOW drops leftover items at the source.
   # BLOCK_COLLECTION leaves drops on the ground if everything cannot fit.
-  # Actionbar and sound are warnings for either overflow or blocked collection.
+  # Actionbar is a warning for either overflow or blocked collection.
   mode: DROP_OVERFLOW
   actionbar: true
-  sound: true

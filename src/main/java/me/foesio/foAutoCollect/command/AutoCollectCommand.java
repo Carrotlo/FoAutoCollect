@@ -42,14 +42,22 @@ public class AutoCollectCommand implements CommandExecutor, TabCompleter {
                 return true;
             }
             if (subcommand.equals("on")) {
+                boolean wasEnabled = plugin.isAutoCollectActive(player);
                 plugin.getToggleStore().setEnabled(player.getUniqueId(), true);
                 plugin.refreshCollectionListeners();
+                if (!wasEnabled) {
+                    playToggleSound(player, true);
+                }
                 plugin.sendMessage(player, "toggle-enabled");
                 return true;
             }
             if (subcommand.equals("off")) {
+                boolean wasEnabled = plugin.isAutoCollectActive(player);
                 plugin.getToggleStore().setEnabled(player.getUniqueId(), false);
                 plugin.refreshCollectionListeners();
+                if (wasEnabled) {
+                    playToggleSound(player, false);
+                }
                 plugin.sendMessage(player, "toggle-disabled");
                 return true;
             }
@@ -61,8 +69,13 @@ public class AutoCollectCommand implements CommandExecutor, TabCompleter {
         boolean enabled = !plugin.getToggleStore().isEnabled(player.getUniqueId());
         plugin.getToggleStore().setEnabled(player.getUniqueId(), enabled);
         plugin.refreshCollectionListeners();
+        playToggleSound(player, enabled);
         plugin.sendMessage(player, enabled ? "toggle-enabled" : "toggle-disabled");
         return true;
+    }
+
+    private void playToggleSound(Player player, boolean enabled) {
+        plugin.getSounds().play(player, enabled ? "auto-collect.enabled" : "auto-collect.disabled");
     }
 
     @Override

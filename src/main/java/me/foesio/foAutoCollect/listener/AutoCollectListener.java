@@ -8,7 +8,6 @@ import me.foesio.foAutoCollect.FoAutoCollect;
 import me.foesio.foAutoCollect.event.AutoCollectItemsCollectedEvent;
 import org.bukkit.Location;
 import org.bukkit.Material;
-import org.bukkit.Sound;
 import org.bukkit.World;
 import org.bukkit.block.Block;
 import org.bukkit.block.BlockState;
@@ -56,11 +55,13 @@ import java.util.function.Supplier;
 public class AutoCollectListener implements Listener {
     private static final long BLOCK_DROP_BATCH_DELAY_TICKS = 4L;
     private static final long COLLECTED_EVENT_LISTENER_CACHE_MILLIS = 1_000L;
+    private static final long PICKUP_SOUND_COOLDOWN_MILLIS = 80L;
 
     private final FoAutoCollect plugin;
     private final InventoryDepositService inventoryDeposits;
     private final Map<UUID, BlockDropBatch> pendingBlockDropBatches = new HashMap<>();
     private final Map<UUID, ShearContext> recentShears = new HashMap<>();
+    private final Map<UUID, Long> pickupSoundCooldowns = new HashMap<>();
     private final List<ExplosionSource> recentExplosionSources = new ArrayList<>();
     private final List<ExplosionCollectContext> recentExplosionCollections = new ArrayList<>();
     private long collectedEventListenerCacheExpiresAt;
@@ -76,6 +77,7 @@ public class AutoCollectListener implements Listener {
         recentShears.clear();
         recentExplosionSources.clear();
         recentExplosionCollections.clear();
+        pickupSoundCooldowns.clear();
     }
 
     public boolean collectExternalReward(Player player, ItemStack itemStack, Location location) {
@@ -334,6 +336,7 @@ public class AutoCollectListener implements Listener {
 
     @EventHandler
     public void onPlayerQuit(PlayerQuitEvent event) {
+        pickupSoundCooldowns.remove(event.getPlayer().getUniqueId());
         flushPendingBlockDrops(event.getPlayer());
         inventoryDeposits.clearFullInventoryFeedbackCooldown(event.getPlayer());
         recentShears.values().removeIf(context -> context.playerId().equals(event.getPlayer().getUniqueId()));
@@ -556,6 +559,9 @@ public class AutoCollectListener implements Listener {
         if (inventoryDeposits.shouldSendFullInventoryFeedback(player, result)) {
             showInventoryFullFeedback(player);
         }
+        if (result != null && !result.blocked() && !result.hasOverflow() && result.acceptedAmount() > 0) {
+            playPickupSound(player);
+        }
         return !result.blocked();
     }
 
@@ -590,12 +596,14 @@ public class AutoCollectListener implements Listener {
             return InventoryDepositResult.blocked(List.of(), null);
         }
 
-        List<ItemStack> overflow = depositFast(player, List.of(stack));
+        Location resultLocation = resolveDropLocation(player, overflowLocation);
+        List<ItemStack> attempted = List.of(stack);
+        List<ItemStack> overflow = depositFast(player, attempted);
         if (!overflow.isEmpty()) {
-            dropOverflow(resolveDropLocation(player, overflowLocation), overflow);
+            dropOverflow(resultLocation, overflow);
             sendInventoryFullFeedback(player);
         }
-        return InventoryDepositResult.empty(null);
+        return fastDepositResult(attempted, overflow, resultLocation);
     }
 
     private void enqueueBlockDrops(Player player, Collection<ItemStack> stacks, BlockState blockState) {
@@ -670,12 +678,47 @@ public class AutoCollectListener implements Listener {
             return InventoryDepositResult.blocked(List.of(), null);
         }
 
+        Location resultLocation = resolveDropLocation(player, overflowLocation);
         List<ItemStack> overflow = depositFast(player, compacted);
         if (!overflow.isEmpty()) {
-            dropOverflow(resolveDropLocation(player, overflowLocation), overflow);
+            dropOverflow(resultLocation, overflow);
             sendInventoryFullFeedback(player);
         }
-        return InventoryDepositResult.empty(null);
+        return fastDepositResult(compacted, overflow, resultLocation);
+    }
+
+    private InventoryDepositResult fastDepositResult(
+            Collection<ItemStack> attempted,
+            List<ItemStack> overflow,
+            Location location
+    ) {
+        int acceptedAmount = Math.max(0, countItems(attempted) - countItems(overflow));
+        if (acceptedAmount <= 0) {
+            return new InventoryDepositResult(List.of(), overflow, location, false);
+        }
+
+        for (ItemStack stack : attempted) {
+            if (!isDepositable(stack)) {
+                continue;
+            }
+            ItemStack accepted = stack.clone();
+            accepted.setAmount(Math.min(accepted.getMaxStackSize(), acceptedAmount));
+            return new InventoryDepositResult(List.of(accepted), overflow, location, false);
+        }
+        return new InventoryDepositResult(List.of(), overflow, location, false);
+    }
+
+    private int countItems(Collection<ItemStack> stacks) {
+        int amount = 0;
+        if (stacks == null) {
+            return amount;
+        }
+        for (ItemStack stack : stacks) {
+            if (isDepositable(stack)) {
+                amount += stack.getAmount();
+            }
+        }
+        return amount;
     }
 
     private List<ItemStack> compactStacks(Collection<ItemStack> stacks) {
@@ -921,6 +964,21 @@ public class AutoCollectListener implements Listener {
         }
     }
 
+    private void playPickupSound(Player player) {
+        if (player == null) {
+            return;
+        }
+        UUID playerId = player.getUniqueId();
+        long now = System.currentTimeMillis();
+        Long lastPlayed = pickupSoundCooldowns.get(playerId);
+        if (lastPlayed != null && now - lastPlayed < PICKUP_SOUND_COOLDOWN_MILLIS) {
+            return;
+        }
+        if (plugin.getSounds().playWithPitchVariation(player, "auto-collect.pickup", 0.1f)) {
+            pickupSoundCooldowns.put(playerId, now);
+        }
+    }
+
     private boolean isDepositable(ItemStack stack) {
         return stack != null && !stack.getType().isAir() && stack.getAmount() > 0;
     }
@@ -946,9 +1004,7 @@ public class AutoCollectListener implements Listener {
                 TextComponent.fromLegacyText(plugin.getMessage("inventory-full-actionbar"))
             );
         }
-        if (plugin.isFullInventorySoundEnabled()) {
-            player.playSound(player.getLocation(), Sound.BLOCK_NOTE_BLOCK_BASS, 0.75F, 0.75F);
-        }
+        plugin.getSounds().play(player, "full-inventory");
     }
 
     private Location centered(Location location) {

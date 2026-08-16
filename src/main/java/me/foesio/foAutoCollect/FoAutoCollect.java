@@ -22,6 +22,11 @@ import me.foesio.core.inventory.InventoryDepositService;
 import me.foesio.core.inventory.OverflowPolicy;
 import me.foesio.core.message.FoMessageService;
 import me.foesio.core.reload.FoReloadRegistry;
+import me.foesio.core.sound.FoAdminSounds;
+import me.foesio.core.sound.FoEditorSounds;
+import me.foesio.core.sound.FoSound;
+import me.foesio.core.sound.FoSoundMigrations;
+import me.foesio.core.sound.FoSoundService;
 import me.foesio.core.update.UpdateNoticeService;
 import me.foesio.foAutoCollect.command.AutoCollectAdminCommand;
 import me.foesio.foAutoCollect.command.AutoCollectCommand;
@@ -30,6 +35,7 @@ import me.foesio.foAutoCollect.integration.FoDropsRewardBridge;
 import me.foesio.foAutoCollect.listener.AutoCollectListener;
 import me.foesio.foAutoCollect.storage.ToggleStore;
 import org.bukkit.Material;
+import org.bukkit.SoundCategory;
 import org.bukkit.World;
 import org.bukkit.command.CommandSender;
 import org.bukkit.configuration.file.FileConfiguration;
@@ -48,6 +54,8 @@ public final class FoAutoCollect extends JavaPlugin {
     private InventoryDepositService inventoryDepositService;
     private CommandVisibilityService commandVisibilityService;
     private FoMessageService messages;
+    private FoSoundService sounds;
+    private FoEditorSounds editorSounds;
     private AutoCollectListener autoCollectListener;
     private boolean collectionListenerRegistered;
     private boolean defaultEnabled;
@@ -68,7 +76,6 @@ public final class FoAutoCollect extends JavaPlugin {
     private int explosionMaxBlocksPerExplosion;
     private int explosionMaxTrackedExplosions;
     private boolean fullInventoryActionbar;
-    private boolean fullInventorySound;
     private OverflowPolicy fullInventoryPolicy = OverflowPolicy.DROP_OVERFLOW;
     private Set<Material> disabledBlocks = Collections.emptySet();
     private Set<EntityType> disabledMobs = Collections.emptySet();
@@ -95,6 +102,8 @@ public final class FoAutoCollect extends JavaPlugin {
         core = FoPluginCore.create(this);
         inventoryDepositService = core.inventoryDeposits();
         core.warnIfNativeDialogsUnavailable();
+        sounds = core.createSounds(soundMigrations());
+        editorSounds = FoEditorSounds.create(sounds);
         reloadSettings();
 
         toggleStore = new ToggleStore(this);
@@ -102,6 +111,7 @@ public final class FoAutoCollect extends JavaPlugin {
         EditorManager editorManager = new EditorManager(this);
         FoReloadRegistry reloadRegistry = FoReloadRegistry.create()
             .addConfig(this)
+            .add("sounds", sounds::reload)
             .add("messages", this::reloadMessages)
             .add("settings", this::reloadSettings);
         autoCollectListener = new AutoCollectListener(this);
@@ -113,7 +123,8 @@ public final class FoAutoCollect extends JavaPlugin {
             .register();
         FoDropsRewardBridge foDropsRewardBridge = new FoDropsRewardBridge(this, autoCollectListener);
         foDropsRewardBridge.register();
-        UpdateNoticeService updates = core.createUpdateNotices(messages, MODRINTH_PROJECT_ID).start();
+        FoAdminSounds adminSounds = FoAdminSounds.create(sounds);
+        UpdateNoticeService updates = core.createUpdateNotices(messages, MODRINTH_PROJECT_ID, adminSounds).start();
 
         AutoCollectCommand userCommand = new AutoCollectCommand(this);
         if (getCommand("foautocollect") != null) {
@@ -123,7 +134,7 @@ public final class FoAutoCollect extends JavaPlugin {
             getLogger().severe("Command 'foautocollect' is missing from plugin.yml.");
         }
 
-        AutoCollectAdminCommand.register(this, editorManager, messages, reloadRegistry, updates);
+        AutoCollectAdminCommand.register(this, editorManager, messages, reloadRegistry, updates, adminSounds);
 
         registerPlaceholderHook();
         startMetrics();
@@ -166,7 +177,6 @@ public final class FoAutoCollect extends JavaPlugin {
         explosionMaxTrackedExplosions = positiveConfigInt("auto-collect.explosions.max-tracked-explosions", 64);
         fullInventoryPolicy = OverflowPolicy.fromConfig(getConfig().getString("full-inventory.mode"));
         fullInventoryActionbar = getConfig().getBoolean("full-inventory.actionbar", true);
-        fullInventorySound = getConfig().getBoolean("full-inventory.sound", true);
         disabledBlocks = normalizeMaterialSet("auto-collect.block-break.disabled-blocks");
         disabledMobs = normalizeMobSet("auto-collect.mob-kills.disabled-mobs");
         blockEnabledWorlds = normalizeWorldList("auto-collect.block-break.enabled-worlds");
@@ -357,12 +367,296 @@ public final class FoAutoCollect extends JavaPlugin {
         return fullInventoryActionbar;
     }
 
-    public boolean isFullInventorySoundEnabled() {
-        return fullInventorySound;
+    public FoSoundService getSounds() {
+        return sounds;
+    }
+
+    public FoMessageService getMessages() {
+        return messages;
+    }
+
+    public FoEditorSounds getEditorSounds() {
+        return editorSounds;
     }
 
     public boolean isFoDropsInstalled() {
         return getServer().getPluginManager().isPluginEnabled("FoDrops");
+    }
+
+    private FoSoundMigrations soundMigrations() {
+        return FoSoundMigrations.create()
+            .moveFromConfig("full-inventory.sound", "full-inventory.enabled")
+            .remove("admin.update-checking")
+            .replaceIfMatches(
+                "auto-collect.enabled",
+                sound("ENTITY_PLAYER_LEVELUP", SoundCategory.PLAYERS, 0.45f, 1.0f),
+                sound("BLOCK_COPPER_BULB_TURN_ON", SoundCategory.PLAYERS, 0.85f, 1.0f)
+            )
+            .replaceIfMatches(
+                "auto-collect.enabled",
+                sound("BLOCK_AMETHYST_BLOCK_CHIME", SoundCategory.PLAYERS, 0.65f, 1.15f),
+                sound("BLOCK_COPPER_BULB_TURN_ON", SoundCategory.PLAYERS, 0.85f, 1.0f)
+            )
+            .replaceIfMatches(
+                "auto-collect.enabled",
+                sound("BLOCK_COPPER_BULB_TURN_ON", SoundCategory.PLAYERS, 0.85f, 1.0f),
+                sound("BLOCK_AMETHYST_BLOCK_RESONATE", SoundCategory.PLAYERS, 2.0f, 1.5f)
+            )
+            .replaceIfMatches(
+                "auto-collect.disabled",
+                sound("BLOCK_NOTE_BLOCK_BASS", SoundCategory.PLAYERS, 0.35f, 0.8f),
+                sound("BLOCK_CRAFTER_FAIL", SoundCategory.PLAYERS, 0.9f, 0.9f)
+            )
+            .replaceIfMatches(
+                "auto-collect.disabled",
+                sound("BLOCK_AMETHYST_BLOCK_RESONATE", SoundCategory.PLAYERS, 0.7f, 0.9f),
+                sound("BLOCK_CRAFTER_FAIL", SoundCategory.PLAYERS, 0.9f, 0.9f)
+            )
+            .replaceIfMatches(
+                "auto-collect.disabled",
+                sound("BLOCK_CRAFTER_FAIL", SoundCategory.PLAYERS, 0.9f, 0.9f),
+                sound("BLOCK_CRAFTER_FAIL", SoundCategory.PLAYERS, 2.0f, 2.0f)
+            )
+            .replaceIfMatches(
+                "auto-collect.pickup",
+                sound("ENTITY_ITEM_PICKUP", SoundCategory.PLAYERS, 0.2f, 1.0f),
+                sound("ENTITY_ALLAY_ITEM_TAKEN", SoundCategory.PLAYERS, 0.4f, 1.0f)
+            )
+            .replaceIfMatches(
+                "auto-collect.pickup",
+                sound("ENTITY_ITEM_PICKUP", SoundCategory.PLAYERS, 0.35f, 1.0f),
+                sound("ENTITY_ALLAY_ITEM_TAKEN", SoundCategory.PLAYERS, 0.4f, 1.0f)
+            )
+            .replaceIfMatches(
+                "auto-collect.pickup",
+                sound("ENTITY_ALLAY_ITEM_TAKEN", SoundCategory.PLAYERS, 0.4f, 1.0f),
+                sound("ENTITY_ITEM_PICKUP", SoundCategory.PLAYERS, 0.2f, 1.0f)
+            )
+            .replaceIfMatches(
+                "editor.open",
+                sound("BLOCK_CHEST_OPEN", SoundCategory.MASTER, 0.45f, 1.0f),
+                sound("BLOCK_VAULT_OPEN_SHUTTER", SoundCategory.MASTER, 0.55f, 1.0f)
+            )
+            .replaceIfMatches(
+                "editor.open",
+                sound("BLOCK_AMETHYST_BLOCK_CHIME", SoundCategory.MASTER, 0.65f, 1.0f),
+                sound("BLOCK_VAULT_OPEN_SHUTTER", SoundCategory.MASTER, 0.55f, 1.0f)
+            )
+            .replaceIfMatches(
+                "editor.back",
+                sound("UI_BUTTON_CLICK", SoundCategory.MASTER, 0.35f, 0.85f),
+                sound("BLOCK_VAULT_CLOSE_SHUTTER", SoundCategory.MASTER, 0.55f, 0.95f)
+            )
+            .replaceIfMatches(
+                "editor.back",
+                sound("BLOCK_AMETHYST_BLOCK_RESONATE", SoundCategory.MASTER, 0.6f, 0.85f),
+                sound("BLOCK_VAULT_CLOSE_SHUTTER", SoundCategory.MASTER, 0.55f, 0.95f)
+            )
+            .replaceIfMatches(
+                "editor.page-next",
+                sound("ITEM_BOOK_PAGE_TURN", SoundCategory.MASTER, 0.35f, 1.1f),
+                sound("BLOCK_BAMBOO_WOOD_BUTTON_CLICK_ON", SoundCategory.MASTER, 0.55f, 1.1f)
+            )
+            .replaceIfMatches(
+                "editor.page-next",
+                sound("BLOCK_AMETHYST_BLOCK_CHIME", SoundCategory.MASTER, 0.5f, 1.2f),
+                sound("BLOCK_BAMBOO_WOOD_BUTTON_CLICK_ON", SoundCategory.MASTER, 0.55f, 1.1f)
+            )
+            .replaceIfMatches(
+                "editor.page-previous",
+                sound("ITEM_BOOK_PAGE_TURN", SoundCategory.MASTER, 0.35f, 0.9f),
+                sound("BLOCK_CHERRY_WOOD_BUTTON_CLICK_OFF", SoundCategory.MASTER, 0.55f, 0.95f)
+            )
+            .replaceIfMatches(
+                "editor.page-previous",
+                sound("BLOCK_AMETHYST_BLOCK_CHIME", SoundCategory.MASTER, 0.5f, 0.85f),
+                sound("BLOCK_CHERRY_WOOD_BUTTON_CLICK_OFF", SoundCategory.MASTER, 0.55f, 0.95f)
+            )
+            .replaceIfMatches(
+                "editor.search",
+                sound("UI_BUTTON_CLICK", SoundCategory.MASTER, 0.25f, 1.2f),
+                sound("BLOCK_CRAFTER_CRAFT", SoundCategory.MASTER, 0.55f, 1.0f)
+            )
+            .replaceIfMatches(
+                "editor.search",
+                sound("BLOCK_AMETHYST_CLUSTER_HIT", SoundCategory.MASTER, 0.55f, 1.15f),
+                sound("BLOCK_CRAFTER_CRAFT", SoundCategory.MASTER, 0.55f, 1.0f)
+            )
+            .replaceIfMatches(
+                "editor.clear-search",
+                sound("UI_BUTTON_CLICK", SoundCategory.MASTER, 0.25f, 0.75f),
+                sound("BLOCK_COPPER_BULB_TURN_OFF", SoundCategory.MASTER, 0.55f, 1.0f)
+            )
+            .replaceIfMatches(
+                "editor.clear-search",
+                sound("BLOCK_AMETHYST_CLUSTER_HIT", SoundCategory.MASTER, 0.55f, 0.85f),
+                sound("BLOCK_COPPER_BULB_TURN_OFF", SoundCategory.MASTER, 0.55f, 1.0f)
+            )
+            .replaceIfMatches(
+                "editor.toggle-on",
+                sound("BLOCK_NOTE_BLOCK_PLING", SoundCategory.MASTER, 0.4f, 1.35f),
+                sound("BLOCK_BEACON_ACTIVATE", SoundCategory.MASTER, 0.8f, 1.2f)
+            )
+            .replaceIfMatches(
+                "editor.toggle-on",
+                sound("ENTITY_ALLAY_ITEM_GIVEN", SoundCategory.MASTER, 0.65f, 1.15f),
+                sound("BLOCK_BAMBOO_WOOD_BUTTON_CLICK_ON", SoundCategory.MASTER, 0.8f, 1.1f)
+            )
+            .replaceIfMatches(
+                "editor.toggle-on",
+                sound("BLOCK_BEACON_ACTIVATE", SoundCategory.MASTER, 0.8f, 1.2f),
+                sound("BLOCK_COPPER_BULB_TURN_ON", SoundCategory.MASTER, 0.8f, 1.2f)
+            )
+            .replaceIfMatches(
+                "editor.toggle-on",
+                sound("BLOCK_BAMBOO_WOOD_BUTTON_CLICK_ON", SoundCategory.MASTER, 0.8f, 1.1f),
+                sound("BLOCK_CRAFTER_CRAFT", SoundCategory.MASTER, 0.8f, 1.3f)
+            )
+            .replaceIfMatches(
+                "editor.toggle-on",
+                sound("BLOCK_COPPER_BULB_TURN_ON", SoundCategory.MASTER, 0.8f, 1.2f),
+                sound("BLOCK_CRAFTER_CRAFT", SoundCategory.MASTER, 0.8f, 1.3f)
+            )
+            .replaceIfMatches(
+                "editor.toggle-off",
+                sound("BLOCK_NOTE_BLOCK_BASS", SoundCategory.MASTER, 0.35f, 0.85f),
+                sound("BLOCK_COPPER_BULB_TURN_OFF", SoundCategory.MASTER, 0.8f, 0.8f)
+            )
+            .replaceIfMatches(
+                "editor.toggle-off",
+                sound("BLOCK_AMETHYST_BLOCK_RESONATE", SoundCategory.MASTER, 0.6f, 0.8f),
+                sound("BLOCK_COPPER_BULB_TURN_OFF", SoundCategory.MASTER, 0.8f, 0.8f)
+            )
+            .replaceIfMatches(
+                "editor.toggle-off",
+                sound("BLOCK_COPPER_BULB_TURN_OFF", SoundCategory.MASTER, 0.65f, 0.9f),
+                sound("BLOCK_COPPER_BULB_TURN_OFF", SoundCategory.MASTER, 0.8f, 0.8f)
+            )
+            .replaceIfMatches(
+                "editor.toggle-off",
+                sound("BLOCK_BEACON_DEACTIVATE", SoundCategory.MASTER, 0.8f, 1.0f),
+                sound("BLOCK_COPPER_BULB_TURN_OFF", SoundCategory.MASTER, 0.8f, 0.8f)
+            )
+            .replaceIfMatches(
+                "editor.toggle-off",
+                sound("BLOCK_BAMBOO_WOOD_BUTTON_CLICK_OFF", SoundCategory.MASTER, 0.8f, 0.95f),
+                sound("BLOCK_VAULT_REJECT_REWARDED_PLAYER", SoundCategory.MASTER, 0.8f, 0.8f)
+            )
+            .replaceIfMatches(
+                "editor.toggle-off",
+                sound("BLOCK_COPPER_BULB_TURN_OFF", SoundCategory.MASTER, 0.8f, 0.8f),
+                sound("BLOCK_VAULT_REJECT_REWARDED_PLAYER", SoundCategory.MASTER, 0.8f, 0.8f)
+            )
+            .replaceIfMatches(
+                "editor.toggle-on",
+                sound("BLOCK_CRAFTER_CRAFT", SoundCategory.MASTER, 0.8f, 1.3f),
+                sound("BLOCK_VAULT_INSERT_ITEM", SoundCategory.MASTER, 1.0f, 1.5f)
+            )
+            .replaceIfMatches(
+                "editor.toggle-off",
+                sound("BLOCK_VAULT_REJECT_REWARDED_PLAYER", SoundCategory.MASTER, 0.8f, 0.8f),
+                sound("BLOCK_VAULT_INSERT_ITEM_FAIL", SoundCategory.MASTER, 1.0f, 1.5f)
+            )
+            .replaceIfMatches(
+                "editor.add",
+                sound("ENTITY_ITEM_PICKUP", SoundCategory.MASTER, 0.35f, 1.15f),
+                sound("BLOCK_VAULT_INSERT_ITEM", SoundCategory.MASTER, 0.55f, 1.1f)
+            )
+            .replaceIfMatches(
+                "editor.add",
+                sound("ENTITY_ITEM_PICKUP", SoundCategory.MASTER, 0.4f, 1.15f),
+                sound("BLOCK_VAULT_INSERT_ITEM", SoundCategory.MASTER, 0.55f, 1.1f)
+            )
+            .replaceIfMatches(
+                "editor.delete",
+                sound("ENTITY_ITEM_BREAK", SoundCategory.MASTER, 0.4f, 0.9f),
+                sound("BLOCK_VAULT_EJECT_ITEM", SoundCategory.MASTER, 0.6f, 0.9f)
+            )
+            .replaceIfMatches(
+                "editor.delete",
+                sound("ENTITY_ITEM_BREAK", SoundCategory.MASTER, 0.5f, 0.9f),
+                sound("BLOCK_VAULT_EJECT_ITEM", SoundCategory.MASTER, 0.6f, 0.9f)
+            )
+            .replaceIfMatches(
+                "editor.cycle",
+                sound("UI_BUTTON_CLICK", SoundCategory.MASTER, 0.3f, 1.05f),
+                sound("BLOCK_COPPER_BULB_TURN_ON", SoundCategory.MASTER, 0.9f, 0.5f)
+            )
+            .replaceIfMatches(
+                "editor.cycle",
+                sound("BLOCK_AMETHYST_CLUSTER_HIT", SoundCategory.MASTER, 0.5f, 1.0f),
+                sound("BLOCK_COPPER_BULB_TURN_ON", SoundCategory.MASTER, 0.9f, 0.5f)
+            )
+            .replaceIfMatches(
+                "editor.cycle",
+                sound("BLOCK_COPPER_GRATE_HIT", SoundCategory.MASTER, 0.5f, 1.0f),
+                sound("BLOCK_COPPER_BULB_TURN_ON", SoundCategory.MASTER, 0.9f, 0.5f)
+            )
+            .replaceIfMatches(
+                "editor.cycle",
+                sound("BLOCK_COPPER_BULB_TURN_ON", SoundCategory.MASTER, 0.9f, 0.5f),
+                sound("BLOCK_COPPER_BULB_TURN_ON", SoundCategory.MASTER, 1.0f, 0.5f)
+            )
+            .replaceIfMatches(
+                "editor.save",
+                sound("ENTITY_EXPERIENCE_ORB_PICKUP", SoundCategory.MASTER, 0.3f, 1.15f),
+                sound("BLOCK_VAULT_ACTIVATE", SoundCategory.MASTER, 0.65f, 1.0f)
+            )
+            .replaceIfMatches(
+                "editor.save",
+                sound("ENTITY_PLAYER_LEVELUP", SoundCategory.MASTER, 0.6f, 1.1f),
+                sound("BLOCK_VAULT_ACTIVATE", SoundCategory.MASTER, 0.65f, 1.0f)
+            )
+            .replaceIfMatches(
+                "editor.error",
+                sound("ENTITY_VILLAGER_NO", SoundCategory.MASTER, 0.35f, 1.0f),
+                sound("BLOCK_VAULT_INSERT_ITEM_FAIL", SoundCategory.MASTER, 0.75f, 1.0f)
+            )
+            .replaceIfMatches(
+                "editor.error",
+                sound("ENTITY_VILLAGER_NO", SoundCategory.MASTER, 0.6f, 1.0f),
+                sound("BLOCK_VAULT_INSERT_ITEM_FAIL", SoundCategory.MASTER, 0.75f, 1.0f)
+            )
+            .replaceIfMatches(
+                "full-inventory",
+                sound("BLOCK_NOTE_BLOCK_BASS", SoundCategory.MASTER, 0.75f, 0.75f),
+                sound("BLOCK_VAULT_REJECT_REWARDED_PLAYER", SoundCategory.MASTER, 0.8f, 0.9f)
+            )
+            .replaceIfMatches(
+                "full-inventory",
+                sound("ENTITY_ALLAY_HURT", SoundCategory.MASTER, 0.7f, 0.9f),
+                sound("BLOCK_VAULT_REJECT_REWARDED_PLAYER", SoundCategory.MASTER, 0.8f, 0.9f)
+            )
+            .replaceIfMatches(
+                "admin.update-latest",
+                sound("ENTITY_ALLAY_ITEM_GIVEN", SoundCategory.MASTER, 0.7f, 1.05f),
+                sound("BLOCK_TRIAL_SPAWNER_EJECT_ITEM", SoundCategory.MASTER, 0.8f, 1.0f)
+            )
+            .replaceIfMatches(
+                "admin.update-available",
+                sound("BLOCK_VAULT_ACTIVATE", SoundCategory.MASTER, 0.75f, 1.1f),
+                sound("BLOCK_TRIAL_SPAWNER_OPEN_SHUTTER", SoundCategory.MASTER, 0.7f, 0.9f)
+            )
+            .replaceIfMatches(
+                "admin.update-error",
+                sound("BLOCK_VAULT_INSERT_ITEM_FAIL", SoundCategory.MASTER, 0.85f, 0.9f),
+                sound("BLOCK_TRIAL_SPAWNER_DETECT_PLAYER", SoundCategory.MASTER, 0.8f, 1.0f)
+            )
+            .replaceIfMatches(
+                "admin.reload",
+                sound("BLOCK_COPPER_CHEST_OPEN", SoundCategory.MASTER, 0.65f, 1.0f),
+                sound("BLOCK_BEACON_ACTIVATE", SoundCategory.MASTER, 0.8f, 1.2f)
+            )
+            .replaceIfMatches(
+                "admin.reload-error",
+                sound("BLOCK_CRAFTER_FAIL", SoundCategory.MASTER, 0.85f, 0.8f),
+                sound("BLOCK_TRIAL_SPAWNER_OMINOUS_ACTIVATE", SoundCategory.MASTER, 0.8f, 0.9f)
+            )
+            .build();
+    }
+
+    private FoSound sound(String key, SoundCategory category, float volume, float pitch) {
+        return new FoSound(key, category, volume, pitch, true);
     }
 
     public DialogService getDialogService() {

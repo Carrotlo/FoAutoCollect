@@ -10,6 +10,7 @@ import me.foesio.core.command.FoAdminMessages;
 import me.foesio.core.command.FoAdminSubcommand;
 import me.foesio.core.message.FoMessageService;
 import me.foesio.core.reload.FoReloadRegistry;
+import me.foesio.core.sound.FoAdminSounds;
 import me.foesio.core.update.UpdateNoticeService;
 import me.foesio.foAutoCollect.FoAutoCollect;
 import me.foesio.foAutoCollect.editor.EditorManager;
@@ -36,7 +37,8 @@ public final class AutoCollectAdminCommand {
         EditorManager editorManager,
         FoMessageService messages,
         FoReloadRegistry reloadRegistry,
-        UpdateNoticeService updates
+        UpdateNoticeService updates,
+        FoAdminSounds adminSounds
     ) {
         FoAdminCommand.builder(plugin, messages)
             .commandName("foautocollectadmin")
@@ -44,6 +46,7 @@ public final class AutoCollectAdminCommand {
             .adminMessages(adminMessages())
             .reloads(reloadRegistry)
             .updates(updates)
+            .adminSounds(adminSounds)
             .editor(editorManager::openMainMenu)
             .defaultExecutor(context -> sendHelp(plugin, context))
             .addSubcommand(setSubcommand(plugin))

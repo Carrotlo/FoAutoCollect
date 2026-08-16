@@ -2,9 +2,12 @@ package me.foesio.foAutoCollect.editor;
 
 import me.foesio.core.dialog.DialogButton;
 import me.foesio.core.dialog.TextDialogRequest;
+import me.foesio.core.editor.CycleOption;
+import me.foesio.core.editor.CycleOptions;
 import me.foesio.core.editor.EditorDialogInputs;
 import me.foesio.core.editor.EditorItemFactory;
 import me.foesio.core.gui.GuiButtonConfig;
+import me.foesio.core.inventory.OverflowPolicy;
 import me.foesio.core.material.MaterialChooserClick;
 import me.foesio.core.material.MaterialChooserHolder;
 import me.foesio.core.material.MaterialChooserMenus;
@@ -55,6 +58,10 @@ import java.util.concurrent.ConcurrentHashMap;
 
 public class EditorManager implements Listener {
     private static final GuiButtonConfig GUI_BUTTONS = GuiButtonConfig.defaults();
+    private static final List<CycleOption> FULL_INVENTORY_OPTIONS = List.of(
+        new CycleOption(OverflowPolicy.DROP_OVERFLOW.name(), "Drop Overflow (leftovers drop)"),
+        new CycleOption(OverflowPolicy.BLOCK_COLLECTION.name(), "Block Collection (requires room)")
+    );
 
     private final FoAutoCollect plugin;
     private final ItemStack backgroundFiller;
@@ -67,8 +74,13 @@ public class EditorManager implements Listener {
     }
 
     public void openMainMenu(Player player) {
+        plugin.getEditorSounds().open(player);
+        renderMainMenu(player);
+    }
+
+    private void renderMainMenu(Player player) {
         EditorMenu menu = new EditorMenu(MenuType.MAIN, null);
-        Inventory inventory = Bukkit.createInventory(menu, 54, plugin.getGuiTitle("main", "&8ꜰᴏᴀᴜᴛᴏᴄᴏʟʟᴇᴄᴛ ᴇᴅɪᴛᴏʀ"));
+        Inventory inventory = Bukkit.createInventory(menu, 36, plugin.getGuiTitle("main", "&8ꜰᴏᴀᴜᴛᴏᴄᴏʟʟᴇᴄᴛ ᴇᴅɪᴛᴏʀ"));
         menu.setInventory(inventory);
 
         inventory.setItem(10, createToggleItem(
@@ -79,7 +91,7 @@ public class EditorManager implements Listener {
             "{white}is treated as auto collect ON.",
             "{white}Personal toggles are ignored."
         ));
-        inventory.setItem(12, createItem(
+        inventory.setItem(11, createItem(
             Material.GRASS_BLOCK,
             "{theme}Block Breaks",
             "{white}Status: " + formatState(plugin.getConfig().getBoolean("auto-collect.block-break.enabled", true)),
@@ -89,7 +101,7 @@ public class EditorManager implements Listener {
             "",
             "{white}Click to edit block rules."
         ));
-        inventory.setItem(14, createItem(
+        inventory.setItem(12, createItem(
             Material.ZOMBIE_HEAD,
             "{theme}Mob Kills",
             "{white}Status: " + formatState(plugin.getConfig().getBoolean("auto-collect.mob-kills.enabled", true)),
@@ -99,7 +111,7 @@ public class EditorManager implements Listener {
             "",
             "{white}Click to edit mob rules."
         ));
-        inventory.setItem(16, createItem(
+        inventory.setItem(20, createItem(
             Material.ENDER_CHEST,
             "{theme}FoDrops Integration",
             "{white}Installed: " + formatState(plugin.isFoDropsInstalled()),
@@ -108,7 +120,7 @@ public class EditorManager implements Listener {
             "{white}Unsafe spawned item",
             "{white}guessing is disabled."
         ));
-        inventory.setItem(19, createItem(
+        inventory.setItem(14, createItem(
             Material.FISHING_ROD,
             "{theme}Fishing",
             "{white}Status: " + formatState(plugin.getConfig().getBoolean("auto-collect.fishing.enabled", true)),
@@ -117,7 +129,7 @@ public class EditorManager implements Listener {
             "",
             "{white}Click to edit fishing."
         ));
-        inventory.setItem(21, createItem(
+        inventory.setItem(15, createItem(
             Material.SHEARS,
             "{theme}Shearing",
             "{white}Status: " + formatState(plugin.getConfig().getBoolean("auto-collect.shearing.enabled", true)),
@@ -125,7 +137,7 @@ public class EditorManager implements Listener {
             "",
             "{white}Click to edit shearing."
         ));
-        inventory.setItem(23, createItem(
+        inventory.setItem(13, createItem(
             Material.TNT,
             "{theme}Explosions",
             "{white}Status: " + formatState(plugin.getConfig().getBoolean("auto-collect.explosions.enabled", true)),
@@ -133,29 +145,17 @@ public class EditorManager implements Listener {
             "",
             "{white}Click to edit explosion rewards."
         ));
-        inventory.setItem(28, createItem(
+        inventory.setItem(16, createCycleItem(
             Material.HOPPER,
-            "{theme}Full Inventory Mode",
-            "{white}Current: {theme}" + plugin.getFullInventoryPolicy().displayName(),
-            "",
-            "{white}Drop Overflow: leftovers drop.",
-            "{white}Block Collection: leave drops",
-            "{white}if everything cannot fit.",
-            "{white}Click to cycle."
+            "Full Inventory Mode",
+            plugin.getFullInventoryPolicy().name(),
+            FULL_INVENTORY_OPTIONS
         ));
-        inventory.setItem(30, createToggleItem(
+        inventory.setItem(19, createToggleItem(
             Material.OAK_SIGN,
             "Full Inventory Actionbar",
             plugin.isFullInventoryActionbarEnabled(),
             "{white}Shows a short actionbar",
-            "{white}when inventory blocks or",
-            "{white}overflows collection."
-        ));
-        inventory.setItem(32, createToggleItem(
-            Material.NOTE_BLOCK,
-            "Full Inventory Sound",
-            plugin.isFullInventorySoundEnabled(),
-            "{white}Plays a warning sound",
             "{white}when inventory blocks or",
             "{white}overflows collection."
         ));
@@ -164,41 +164,40 @@ public class EditorManager implements Listener {
     }
 
     public void openSectionMenu(Player player, SectionType section) {
+        plugin.getEditorSounds().open(player);
+        renderSectionMenu(player, section);
+    }
+
+    private void renderSectionMenu(Player player, SectionType section) {
         EditorMenu menu = new EditorMenu(MenuType.SECTION, section);
-        Inventory inventory = Bukkit.createInventory(menu, 54, plugin.getGuiTitle(section.guiTitleKey, section.fallbackTitle));
+        Inventory inventory = Bukkit.createInventory(menu, sectionMenuSize(section), plugin.getGuiTitle(section.guiTitleKey, section.fallbackTitle));
         menu.setInventory(inventory);
 
-        inventory.setItem(11, createToggleItem(
+        inventory.setItem(sectionEnabledSlot(section), createToggleItem(
             section.mainIcon,
             section.displayName + " Enabled",
             plugin.getConfig().getBoolean(section.basePath + ".enabled", true),
             "{white}Controls this full collection",
             "{white}category for all players."
         ));
-        inventory.setItem(13, createToggleItem(
+        inventory.setItem(sectionCollectDropsSlot(section), createToggleItem(
             Material.CHEST,
             "Collect Drops",
             plugin.getConfig().getBoolean(section.basePath + ".collect-drops", true),
             "{white}If ON, matching drops go",
             "{white}straight into inventory."
         ));
-        inventory.setItem(15, createToggleItem(
-            Material.EXPERIENCE_BOTTLE,
-            "Collect Experience",
-            plugin.getConfig().getBoolean(section.basePath + ".collect-experience", true),
-            "{white}If ON, matching XP goes",
-            "{white}straight into the XP bar."
-        ));
-        if (!section.hasExperience) {
-            inventory.setItem(15, createItem(
-                Material.GRAY_DYE,
-                "{muted}No Experience Setting",
-                "{white}This event does not expose",
-                "{white}XP collection."
+        if (section.hasExperience) {
+            inventory.setItem(sectionCollectExperienceSlot(section), createToggleItem(
+                Material.EXPERIENCE_BOTTLE,
+                "Collect Experience",
+                plugin.getConfig().getBoolean(section.basePath + ".collect-experience", true),
+                "{white}If ON, matching XP goes",
+                "{white}straight into the XP bar."
             ));
         }
         if (section.hasDisabledBrowser()) {
-            inventory.setItem(31, createItem(
+            inventory.setItem(sectionDisabledBrowserSlot(section), createItem(
                 section.listIcon,
                 "{theme}" + section.disabledDisplayName,
                 "{white}Entries: {theme}" + getDisabledList(section).size(),
@@ -211,17 +210,22 @@ public class EditorManager implements Listener {
             getWorldList(section, WorldListType.DISABLED).size(),
             "Enabled"
         ));
-        inventory.setItem(49, GUI_BUTTONS.back());
+        inventory.setItem(sectionBackSlot(section), GUI_BUTTONS.back());
 
         fillBackground(inventory);
         player.openInventory(inventory);
     }
 
     public void openPicker(Player player, SectionType section, int page) {
-        openPicker(player, section, page, "");
+        plugin.getEditorSounds().open(player);
+        renderPicker(player, section, page, "");
     }
 
     public void openPicker(Player player, SectionType section, int page, String filter) {
+        renderPicker(player, section, page, filter);
+    }
+
+    private void renderPicker(Player player, SectionType section, int page, String filter) {
         disabledPickerSections.put(player.getUniqueId(), section);
         if (section == SectionType.BLOCK_BREAK) {
             MaterialChooserMenus.open(player, MaterialChooserRequest.builder()
@@ -248,10 +252,15 @@ public class EditorManager implements Listener {
     }
 
     public void openWorldPicker(Player player, SectionType section, int page) {
-        openWorldPicker(player, section, page, "");
+        plugin.getEditorSounds().open(player);
+        renderWorldPicker(player, section, page, "");
     }
 
     public void openWorldPicker(Player player, SectionType section, int page, String filter) {
+        renderWorldPicker(player, section, page, filter);
+    }
+
+    private void renderWorldPicker(Player player, SectionType section, int page, String filter) {
         worldPickerSections.put(player.getUniqueId(), section);
         List<String> enabled = getWorldList(section, WorldListType.ENABLED);
         List<String> disabled = getWorldList(section, WorldListType.DISABLED);
@@ -307,6 +316,7 @@ public class EditorManager implements Listener {
         if (!player.hasPermission("foautocollect.admin")) {
             player.closeInventory();
             plugin.sendMessage(player, "no-permission");
+            plugin.getEditorSounds().error(player);
             return;
         }
 
@@ -366,86 +376,83 @@ public class EditorManager implements Listener {
 
     private void handleMainClick(Player player, int slot) {
         if (slot == 10) {
-            toggle("force-enabled");
+            boolean enabled = toggle("force-enabled");
+            plugin.getEditorSounds().toggle(player, enabled);
             plugin.sendMessage(player, "editor-saved", "{setting}", "force enabled");
-            openMainMenu(player);
+            renderMainMenu(player);
             return;
         }
-        if (slot == 12) {
+        if (slot == 11) {
             openSectionMenu(player, SectionType.BLOCK_BREAK);
             return;
         }
-        if (slot == 14) {
+        if (slot == 12) {
             openSectionMenu(player, SectionType.MOB_KILLS);
             return;
         }
-        if (slot == 19) {
-            openSectionMenu(player, SectionType.FISHING);
-            return;
-        }
-        if (slot == 21) {
-            openSectionMenu(player, SectionType.SHEARING);
-            return;
-        }
-        if (slot == 23) {
+        if (slot == 13) {
             openSectionMenu(player, SectionType.EXPLOSIONS);
             return;
         }
-        if (slot == 28) {
-            plugin.getConfig().set("full-inventory.mode", plugin.getFullInventoryPolicy().next().name());
+        if (slot == 14) {
+            openSectionMenu(player, SectionType.FISHING);
+            return;
+        }
+        if (slot == 15) {
+            openSectionMenu(player, SectionType.SHEARING);
+            return;
+        }
+        if (slot == 16) {
+            String next = CycleOptions.nextValue(plugin.getFullInventoryPolicy().name(), FULL_INVENTORY_OPTIONS);
+            plugin.getConfig().set("full-inventory.mode", next);
             saveSettings();
+            plugin.getEditorSounds().cycle(player);
             plugin.sendMessage(player, "editor-saved", "{setting}", "full inventory mode");
-            openMainMenu(player);
+            renderMainMenu(player);
             return;
         }
-        if (slot == 30) {
-            toggle("full-inventory.actionbar");
+        if (slot == 19) {
+            boolean enabled = toggle("full-inventory.actionbar");
+            plugin.getEditorSounds().toggle(player, enabled);
             plugin.sendMessage(player, "editor-saved", "{setting}", "full inventory actionbar");
-            openMainMenu(player);
-            return;
-        }
-        if (slot == 32) {
-            toggle("full-inventory.sound");
-            plugin.sendMessage(player, "editor-saved", "{setting}", "full inventory sound");
-            openMainMenu(player);
+            renderMainMenu(player);
             return;
         }
     }
 
     private void handleSectionClick(Player player, SectionType section, int slot) {
-        if (slot == 11) {
-            toggle(section.basePath + ".enabled");
+        if (slot == sectionEnabledSlot(section)) {
+            boolean enabled = toggle(section.basePath + ".enabled");
+            plugin.getEditorSounds().toggle(player, enabled);
             plugin.sendMessage(player, "editor-saved", "{setting}", section.displayName + " enabled");
-            openSectionMenu(player, section);
+            renderSectionMenu(player, section);
             return;
         }
-        if (slot == 13) {
-            toggle(section.basePath + ".collect-drops");
+        if (slot == sectionCollectDropsSlot(section)) {
+            boolean enabled = toggle(section.basePath + ".collect-drops");
+            plugin.getEditorSounds().toggle(player, enabled);
             plugin.sendMessage(player, "editor-saved", "{setting}", section.displayName + " drops");
-            openSectionMenu(player, section);
+            renderSectionMenu(player, section);
             return;
         }
-        if (slot == 15) {
-            if (!section.hasExperience) {
-                return;
-            }
-            toggle(section.basePath + ".collect-experience");
+        if (section.hasExperience && slot == sectionCollectExperienceSlot(section)) {
+            boolean enabled = toggle(section.basePath + ".collect-experience");
+            plugin.getEditorSounds().toggle(player, enabled);
             plugin.sendMessage(player, "editor-saved", "{setting}", section.displayName + " XP");
-            openSectionMenu(player, section);
+            renderSectionMenu(player, section);
             return;
         }
-        if (slot == 31) {
-            if (section.hasDisabledBrowser()) {
-                openPicker(player, section, 0);
-            }
+        if (slot == sectionDisabledBrowserSlot(section) && section.hasDisabledBrowser()) {
+            openPicker(player, section, 0);
             return;
         }
         if (slot == worldsSlot(section)) {
             openWorldPicker(player, section, 0);
             return;
         }
-        if (slot == 49) {
-            openMainMenu(player);
+        if (slot == sectionBackSlot(section)) {
+            plugin.getEditorSounds().back(player);
+            renderMainMenu(player);
         }
     }
 
@@ -461,18 +468,41 @@ public class EditorManager implements Listener {
         SectionType section = disabledPickerSections.get(player.getUniqueId());
         if (section == null) {
             player.closeInventory();
+            plugin.getEditorSounds().error(player);
             return;
         }
 
         MaterialChooserClick click = MaterialChooserMenus.handleClick(event.getRawSlot(), holder);
         switch (click.action()) {
-            case PREVIOUS_PAGE, NEXT_PAGE, CLEAR_SEARCH -> MaterialChooserMenus.open(player, click.nextRequest());
-            case SEARCH -> startSearchPrompt(player, section, holder.request().filter());
-            case BACK -> openSectionMenu(player, section);
+            case PREVIOUS_PAGE -> {
+                plugin.getEditorSounds().previousPage(player);
+                MaterialChooserMenus.open(player, click.nextRequest());
+            }
+            case NEXT_PAGE -> {
+                plugin.getEditorSounds().nextPage(player);
+                MaterialChooserMenus.open(player, click.nextRequest());
+            }
+            case CLEAR_SEARCH -> {
+                plugin.getEditorSounds().clearSearch(player);
+                MaterialChooserMenus.open(player, click.nextRequest());
+            }
+            case SEARCH -> {
+                plugin.getEditorSounds().search(player);
+                startSearchPrompt(player, section, holder.request().filter());
+            }
+            case BACK -> {
+                plugin.getEditorSounds().back(player);
+                renderSectionMenu(player, section);
+            }
             case TOGGLE -> {
                 Set<Material> next = MaterialSelections.toggled(holder.request().selectedMaterials(), click.material());
                 plugin.getConfig().set(section.disabledPath(), MaterialSelections.toKeys(next));
                 saveSettings();
+                if (next.contains(click.material())) {
+                    plugin.getEditorSounds().addItem(player);
+                } else {
+                    plugin.getEditorSounds().delete(player);
+                }
                 plugin.sendMessage(
                     player,
                     next.contains(click.material()) ? "editor-added" : "editor-removed",
@@ -498,18 +528,41 @@ public class EditorManager implements Listener {
         SectionType section = disabledPickerSections.get(player.getUniqueId());
         if (section == null) {
             player.closeInventory();
+            plugin.getEditorSounds().error(player);
             return;
         }
 
         MobChooserClick click = MobChooserMenus.handleClick(event.getRawSlot(), holder);
         switch (click.action()) {
-            case PREVIOUS_PAGE, NEXT_PAGE, CLEAR_SEARCH -> MobChooserMenus.open(player, click.nextRequest());
-            case SEARCH -> startSearchPrompt(player, section, holder.request().filter());
-            case BACK -> openSectionMenu(player, section);
+            case PREVIOUS_PAGE -> {
+                plugin.getEditorSounds().previousPage(player);
+                MobChooserMenus.open(player, click.nextRequest());
+            }
+            case NEXT_PAGE -> {
+                plugin.getEditorSounds().nextPage(player);
+                MobChooserMenus.open(player, click.nextRequest());
+            }
+            case CLEAR_SEARCH -> {
+                plugin.getEditorSounds().clearSearch(player);
+                MobChooserMenus.open(player, click.nextRequest());
+            }
+            case SEARCH -> {
+                plugin.getEditorSounds().search(player);
+                startSearchPrompt(player, section, holder.request().filter());
+            }
+            case BACK -> {
+                plugin.getEditorSounds().back(player);
+                renderSectionMenu(player, section);
+            }
             case TOGGLE -> {
                 Set<EntityType> next = MobSelections.toggled(holder.request().selectedTypes(), click.entityType());
                 plugin.getConfig().set(section.disabledPath(), MobSelections.toKeys(next));
                 saveSettings();
+                if (next.contains(click.entityType())) {
+                    plugin.getEditorSounds().add(player);
+                } else {
+                    plugin.getEditorSounds().delete(player);
+                }
                 plugin.sendMessage(
                     player,
                     next.contains(click.entityType()) ? "editor-added" : "editor-removed",
@@ -535,16 +588,35 @@ public class EditorManager implements Listener {
         SectionType section = worldPickerSections.get(player.getUniqueId());
         if (section == null) {
             player.closeInventory();
+            plugin.getEditorSounds().error(player);
             return;
         }
 
         TriStateSelectionClick click = TriStateSelectionMenus.handleClick(event.getRawSlot(), holder);
         switch (click.action()) {
-            case PREVIOUS_PAGE, NEXT_PAGE, CLEAR_SEARCH -> TriStateSelectionMenus.open(player, click.nextRequest());
-            case SEARCH -> startWorldSearchPrompt(player, section, holder.request().filter());
-            case BACK -> openSectionMenu(player, section);
+            case PREVIOUS_PAGE -> {
+                plugin.getEditorSounds().previousPage(player);
+                TriStateSelectionMenus.open(player, click.nextRequest());
+            }
+            case NEXT_PAGE -> {
+                plugin.getEditorSounds().nextPage(player);
+                TriStateSelectionMenus.open(player, click.nextRequest());
+            }
+            case CLEAR_SEARCH -> {
+                plugin.getEditorSounds().clearSearch(player);
+                TriStateSelectionMenus.open(player, click.nextRequest());
+            }
+            case SEARCH -> {
+                plugin.getEditorSounds().search(player);
+                startWorldSearchPrompt(player, section, holder.request().filter());
+            }
+            case BACK -> {
+                plugin.getEditorSounds().back(player);
+                renderSectionMenu(player, section);
+            }
             case TOGGLE -> {
                 saveWorldSelection(section, click.nextRequest());
+                plugin.getEditorSounds().cycle(player);
                 plugin.sendMessage(player, "editor-saved", "{setting}", section.displayName + " worlds");
                 TriStateSelectionMenus.open(player, click.nextRequest());
             }
@@ -559,6 +631,7 @@ public class EditorManager implements Listener {
         }
         player.closeInventory();
         plugin.sendMessage(player, "no-permission");
+        plugin.getEditorSounds().error(player);
         return false;
     }
 
@@ -660,14 +733,42 @@ public class EditorManager implements Listener {
         saveSettings();
     }
 
-    private int worldsSlot(SectionType section) {
-        return section.hasDisabledBrowser() ? 33 : 31;
+    private int sectionMenuSize(SectionType section) {
+        return 27;
     }
 
-    private void toggle(String path) {
+    private int sectionEnabledSlot(SectionType section) {
+        return 10;
+    }
+
+    private int sectionCollectDropsSlot(SectionType section) {
+        return 11;
+    }
+
+    private int sectionCollectExperienceSlot(SectionType section) {
+        return 12;
+    }
+
+    private int sectionDisabledBrowserSlot(SectionType section) {
+        return 13;
+    }
+
+    private int worldsSlot(SectionType section) {
+        if (section.hasDisabledBrowser()) {
+            return 14;
+        }
+        return section == SectionType.EXPLOSIONS || section == SectionType.SHEARING ? 12 : 13;
+    }
+
+    private int sectionBackSlot(SectionType section) {
+        return 22;
+    }
+
+    private boolean toggle(String path) {
         boolean current = plugin.getConfig().getBoolean(path, false);
         plugin.getConfig().set(path, !current);
         saveSettings();
+        return !current;
     }
 
     private void saveSettings() {
@@ -717,6 +818,13 @@ public class EditorManager implements Listener {
         lines.add("");
         lines.add("{white}Click to toggle.");
         return createItem(enabled ? Material.LIME_DYE : Material.RED_DYE, state, lines.toArray(new String[0]));
+    }
+
+    private ItemStack createCycleItem(Material material, String label, String currentValue, List<CycleOption> options) {
+        List<String> lines = new ArrayList<>(CycleOptions.lore(plugin.getMessages(), currentValue, options));
+        lines.add("");
+        lines.add("{white}Click to cycle.");
+        return createItem(material, "{theme}" + label, lines.toArray(new String[0]));
     }
 
     private ItemStack createItem(Material material, String name, String... lore) {
