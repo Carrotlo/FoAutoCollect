@@ -22,6 +22,7 @@ public class AutoCollectCommand implements CommandExecutor, TabCompleter {
     public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
         if (!sender.hasPermission("foautocollect.use")) {
             plugin.sendMessage(sender, "no-permission");
+            plugin.getAdminSounds().updateError(sender);
             return true;
         }
 
@@ -32,6 +33,7 @@ public class AutoCollectCommand implements CommandExecutor, TabCompleter {
 
         if (plugin.isForceEnabled()) {
             plugin.sendMessage(player, "toggle-forced");
+            plugin.getAdminSounds().updateError(player);
             return true;
         }
 
@@ -63,6 +65,7 @@ public class AutoCollectCommand implements CommandExecutor, TabCompleter {
             }
 
             plugin.sendMessage(player, "unknown-subcommand", "{arg}", args[0]);
+            plugin.getAdminSounds().updateError(player);
             return true;
         }
 

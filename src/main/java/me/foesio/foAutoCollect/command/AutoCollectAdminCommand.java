@@ -69,18 +69,21 @@ public final class AutoCollectAdminCommand {
         return FoAdminSubcommand.builder("set", context -> {
                 if (context.args().length < 3) {
                     plugin.sendMessage(context.sender(), "invalid-state");
+                    plugin.getAdminSounds().updateError(context.sender());
                     return true;
                 }
 
                 Optional<Player> target = ONLINE_PLAYER.parse(context.arg(1));
                 if (target.isEmpty()) {
                     plugin.sendMessage(context.sender(), "player-not-found");
+                    plugin.getAdminSounds().updateError(context.sender());
                     return true;
                 }
 
                 Optional<Boolean> state = ON_OFF.parse(context.arg(2));
                 if (state.isEmpty()) {
                     plugin.sendMessage(context.sender(), "invalid-state");
+                    plugin.getAdminSounds().updateError(context.sender());
                     return true;
                 }
 
@@ -108,12 +111,14 @@ public final class AutoCollectAdminCommand {
                         plugin.isForceEnabled() ? "{good}enabled" : "{bad}disabled"
                     );
                     plugin.sendMessage(context.sender(), "admin-force-usage");
+                    plugin.getAdminSounds().updateError(context.sender());
                     return true;
                 }
 
                 Optional<Boolean> enabled = ON_OFF.parse(context.arg(1));
                 if (enabled.isEmpty()) {
                     plugin.sendMessage(context.sender(), "invalid-force-state");
+                    plugin.getAdminSounds().updateError(context.sender());
                     return true;
                 }
 

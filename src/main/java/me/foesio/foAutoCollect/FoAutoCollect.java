@@ -55,6 +55,7 @@ public final class FoAutoCollect extends JavaPlugin {
     private CommandVisibilityService commandVisibilityService;
     private FoMessageService messages;
     private FoSoundService sounds;
+    private FoAdminSounds adminSounds;
     private FoEditorSounds editorSounds;
     private AutoCollectListener autoCollectListener;
     private boolean collectionListenerRegistered;
@@ -123,7 +124,7 @@ public final class FoAutoCollect extends JavaPlugin {
             .register();
         FoDropsRewardBridge foDropsRewardBridge = new FoDropsRewardBridge(this, autoCollectListener);
         foDropsRewardBridge.register();
-        FoAdminSounds adminSounds = FoAdminSounds.create(sounds);
+        adminSounds = FoAdminSounds.create(sounds);
         UpdateNoticeService updates = core.createUpdateNotices(messages, MODRINTH_PROJECT_ID, adminSounds).start();
 
         AutoCollectCommand userCommand = new AutoCollectCommand(this);
@@ -369,6 +370,10 @@ public final class FoAutoCollect extends JavaPlugin {
 
     public FoSoundService getSounds() {
         return sounds;
+    }
+
+    public FoAdminSounds getAdminSounds() {
+        return adminSounds;
     }
 
     public FoMessageService getMessages() {

@@ -74,8 +74,8 @@ public class EditorManager implements Listener {
     }
 
     public void openMainMenu(Player player) {
-        plugin.getEditorSounds().open(player);
         renderMainMenu(player);
+        plugin.getEditorSounds().open(player);
     }
 
     private void renderMainMenu(Player player) {
@@ -164,8 +164,8 @@ public class EditorManager implements Listener {
     }
 
     public void openSectionMenu(Player player, SectionType section) {
-        plugin.getEditorSounds().open(player);
         renderSectionMenu(player, section);
+        plugin.getEditorSounds().open(player);
     }
 
     private void renderSectionMenu(Player player, SectionType section) {
@@ -217,8 +217,8 @@ public class EditorManager implements Listener {
     }
 
     public void openPicker(Player player, SectionType section, int page) {
-        plugin.getEditorSounds().open(player);
         renderPicker(player, section, page, "");
+        plugin.getEditorSounds().open(player);
     }
 
     public void openPicker(Player player, SectionType section, int page, String filter) {
@@ -252,8 +252,8 @@ public class EditorManager implements Listener {
     }
 
     public void openWorldPicker(Player player, SectionType section, int page) {
-        plugin.getEditorSounds().open(player);
         renderWorldPicker(player, section, page, "");
+        plugin.getEditorSounds().open(player);
     }
 
     public void openWorldPicker(Player player, SectionType section, int page, String filter) {
@@ -679,10 +679,7 @@ public class EditorManager implements Listener {
 
     private void startSearchPrompt(Player player, SectionType section, String filter) {
         TextDialogRequest prompt = searchPrompt(section.singularTitle + "s");
-        EditorDialogInputs.openTextFromInventory(
-            plugin,
-            plugin.getInventoryCloseSuppressor(),
-            plugin.getDialogService(),
+        openSearchInput(
             player,
             prompt,
             input -> openPicker(player, section, 0, input.trim()),
@@ -695,10 +692,7 @@ public class EditorManager implements Listener {
 
     private void startWorldSearchPrompt(Player player, SectionType section, String filter) {
         TextDialogRequest prompt = searchPrompt("Worlds");
-        EditorDialogInputs.openTextFromInventory(
-            plugin,
-            plugin.getInventoryCloseSuppressor(),
-            plugin.getDialogService(),
+        openSearchInput(
             player,
             prompt,
             input -> openWorldPicker(player, section, 0, input.trim()),
@@ -707,6 +701,35 @@ public class EditorManager implements Listener {
                 openWorldPicker(player, section, 0, filter);
             }
         );
+    }
+
+    private void openSearchInput(
+        Player player,
+        TextDialogRequest prompt,
+        java.util.function.Consumer<String> onSubmit,
+        Runnable onCancel
+    ) {
+        try {
+            boolean nativeOpened = EditorDialogInputs.openTextFromInventory(
+                plugin,
+                plugin.getInventoryCloseSuppressor(),
+                plugin.getDialogService(),
+                player,
+                prompt,
+                input -> onSubmit.accept(input == null ? "" : input.trim()),
+                () -> {
+                    plugin.getEditorSounds().back(player);
+                    onCancel.run();
+                }
+            );
+            if (nativeOpened) {
+                plugin.getEditorSounds().open(player);
+            }
+        } catch (RuntimeException | LinkageError exception) {
+            plugin.getLogger().warning("Editor search input failed: " + exception.getMessage());
+            plugin.getEditorSounds().error(player);
+            onCancel.run();
+        }
     }
 
     private TextDialogRequest searchPrompt(String typePlural) {
