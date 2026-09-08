@@ -15,6 +15,8 @@ import me.foesio.core.material.MaterialChooserMode;
 import me.foesio.core.material.MaterialChooserRequest;
 import me.foesio.core.material.MaterialSelections;
 import me.foesio.core.material.MaterialTypes;
+import me.foesio.core.message.FoMessageService;
+import me.foesio.core.message.FoStyle;
 import me.foesio.core.mob.MobChooserClick;
 import me.foesio.core.mob.MobChooserHolder;
 import me.foesio.core.mob.MobChooserMenus;
@@ -42,13 +44,12 @@ import org.bukkit.event.inventory.InventoryDragEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.InventoryHolder;
-import org.bukkit.inventory.ItemFlag;
 import org.bukkit.inventory.ItemStack;
-import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.plugin.IllegalPluginAccessException;
 
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -70,7 +71,7 @@ public class EditorManager implements Listener {
 
     public EditorManager(FoAutoCollect plugin) {
         this.plugin = plugin;
-        this.backgroundFiller = createItem(Material.GRAY_STAINED_GLASS_PANE, " ");
+        this.backgroundFiller = EditorItemFactory.item(Material.GRAY_STAINED_GLASS_PANE, " ", List.of());
     }
 
     public void openMainMenu(Player player) {
@@ -83,7 +84,7 @@ public class EditorManager implements Listener {
         Inventory inventory = Bukkit.createInventory(menu, 36, plugin.getGuiTitle("main", "&8ꜰᴏᴀᴜᴛᴏᴄᴏʟʟᴇᴄᴛ ᴇᴅɪᴛᴏʀ"));
         menu.setInventory(inventory);
 
-        inventory.setItem(10, createToggleItem(
+        inventory.setItem(10, createToggleItem(player,
             Material.NETHER_STAR,
             "Force Everyone",
             plugin.isForceEnabled(),
@@ -91,27 +92,25 @@ public class EditorManager implements Listener {
             "{white}is treated as auto collect ON.",
             "{white}Personal toggles are ignored."
         ));
-        inventory.setItem(11, createItem(
+        inventory.setItem(11, createButton(player,
             Material.GRASS_BLOCK,
-            "{theme}Block Breaks",
-            "{white}Status: " + formatState(plugin.getConfig().getBoolean("auto-collect.block-break.enabled", true)),
+            "Block Breaks",
+            "edit block rules",
+            "State: " + formatState(plugin.getConfig().getBoolean("auto-collect.block-break.enabled", true)),
             "{white}Drops: " + formatState(plugin.isBlockDropCollectionEnabled()),
             "{white}XP: " + formatState(plugin.isBlockExperienceCollectionEnabled()),
-            "{white}Disabled blocks: {theme}" + plugin.getDisabledBlocks().size(),
-            "",
-            "{white}Click to edit block rules."
+            "{white}Disabled blocks: {theme}" + plugin.getDisabledBlocks().size()
         ));
-        inventory.setItem(12, createItem(
-            Material.ZOMBIE_HEAD,
-            "{theme}Mob Kills",
-            "{white}Status: " + formatState(plugin.getConfig().getBoolean("auto-collect.mob-kills.enabled", true)),
+        inventory.setItem(12, createButton(player,
+            Material.ZOMBIE_SPAWN_EGG,
+            "Mob Kills",
+            "edit mob rules",
+            "State: " + formatState(plugin.getConfig().getBoolean("auto-collect.mob-kills.enabled", true)),
             "{white}Drops: " + formatState(plugin.isMobDropCollectionEnabled()),
             "{white}XP: " + formatState(plugin.isMobExperienceCollectionEnabled()),
-            "{white}Disabled mobs: {theme}" + plugin.getDisabledMobs().size(),
-            "",
-            "{white}Click to edit mob rules."
+            "{white}Disabled mobs: {theme}" + plugin.getDisabledMobs().size()
         ));
-        inventory.setItem(20, createItem(
+        inventory.setItem(20, createInfoItem(player,
             Material.ENDER_CHEST,
             "{theme}FoDrops Integration",
             "{white}Installed: " + formatState(plugin.isFoDropsInstalled()),
@@ -120,38 +119,37 @@ public class EditorManager implements Listener {
             "{white}Unsafe spawned item",
             "{white}guessing is disabled."
         ));
-        inventory.setItem(14, createItem(
+        inventory.setItem(14, createButton(player,
             Material.FISHING_ROD,
-            "{theme}Fishing",
-            "{white}Status: " + formatState(plugin.getConfig().getBoolean("auto-collect.fishing.enabled", true)),
+            "Fishing",
+            "edit fishing",
+            "State: " + formatState(plugin.getConfig().getBoolean("auto-collect.fishing.enabled", true)),
             "{white}Drops: " + formatState(plugin.isFishingDropCollectionEnabled()),
-            "{white}XP: " + formatState(plugin.isFishingExperienceCollectionEnabled()),
-            "",
-            "{white}Click to edit fishing."
+            "{white}XP: " + formatState(plugin.isFishingExperienceCollectionEnabled())
         ));
-        inventory.setItem(15, createItem(
+        inventory.setItem(15, createButton(player,
             Material.SHEARS,
-            "{theme}Shearing",
-            "{white}Status: " + formatState(plugin.getConfig().getBoolean("auto-collect.shearing.enabled", true)),
+            "Shearing",
+            "edit shearing",
+            "State: " + formatState(plugin.getConfig().getBoolean("auto-collect.shearing.enabled", true)),
             "{white}Drops: " + formatState(plugin.isShearingDropCollectionEnabled()),
-            "",
-            "{white}Click to edit shearing."
+            "{white}Experience is not collected here."
         ));
-        inventory.setItem(13, createItem(
+        inventory.setItem(13, createButton(player,
             Material.TNT,
-            "{theme}Explosions",
-            "{white}Status: " + formatState(plugin.getConfig().getBoolean("auto-collect.explosions.enabled", true)),
+            "Explosions",
+            "edit explosion rewards",
+            "State: " + formatState(plugin.getConfig().getBoolean("auto-collect.explosions.enabled", true)),
             "{white}FoDrops rewards: " + formatState(plugin.isExplosionDropCollectionEnabled()),
-            "",
-            "{white}Click to edit explosion rewards."
+            "{white}Player-owned rewards are collected safely."
         ));
-        inventory.setItem(16, createCycleItem(
+        inventory.setItem(16, createCycleItem(player,
             Material.HOPPER,
             "Full Inventory Mode",
             plugin.getFullInventoryPolicy().name(),
             FULL_INVENTORY_OPTIONS
         ));
-        inventory.setItem(19, createToggleItem(
+        inventory.setItem(19, createToggleItem(player,
             Material.OAK_SIGN,
             "Full Inventory Actionbar",
             plugin.isFullInventoryActionbarEnabled(),
@@ -173,14 +171,14 @@ public class EditorManager implements Listener {
         Inventory inventory = Bukkit.createInventory(menu, sectionMenuSize(section), plugin.getGuiTitle(section.guiTitleKey, section.fallbackTitle));
         menu.setInventory(inventory);
 
-        inventory.setItem(sectionEnabledSlot(section), createToggleItem(
+        inventory.setItem(sectionEnabledSlot(section), createToggleItem(player,
             section.mainIcon,
             section.displayName + " Enabled",
             plugin.getConfig().getBoolean(section.basePath + ".enabled", true),
             "{white}Controls this full collection",
             "{white}category for all players."
         ));
-        inventory.setItem(sectionCollectDropsSlot(section), createToggleItem(
+        inventory.setItem(sectionCollectDropsSlot(section), createToggleItem(player,
             Material.CHEST,
             "Collect Drops",
             plugin.getConfig().getBoolean(section.basePath + ".collect-drops", true),
@@ -188,7 +186,7 @@ public class EditorManager implements Listener {
             "{white}straight into inventory."
         ));
         if (section.hasExperience) {
-            inventory.setItem(sectionCollectExperienceSlot(section), createToggleItem(
+            inventory.setItem(sectionCollectExperienceSlot(section), createToggleItem(player,
                 Material.EXPERIENCE_BOTTLE,
                 "Collect Experience",
                 plugin.getConfig().getBoolean(section.basePath + ".collect-experience", true),
@@ -197,20 +195,21 @@ public class EditorManager implements Listener {
             ));
         }
         if (section.hasDisabledBrowser()) {
-            inventory.setItem(sectionDisabledBrowserSlot(section), createItem(
+            inventory.setItem(sectionDisabledBrowserSlot(section), createButton(player,
                 section.listIcon,
-                "{theme}" + section.disabledDisplayName,
+                section.disabledDisplayName,
+                "open browser",
                 "{white}Entries: {theme}" + getDisabledList(section).size(),
-                "",
-                "{white}Click to open browser."
+                "{white}Select entries that should stay disabled."
             ));
         }
         inventory.setItem(worldsSlot(section), EditorItemFactory.worlds(
+            player,
             getWorldList(section, WorldListType.ENABLED).size(),
             getWorldList(section, WorldListType.DISABLED).size(),
             "Enabled"
         ));
-        inventory.setItem(sectionBackSlot(section), GUI_BUTTONS.back());
+        inventory.setItem(sectionBackSlot(section), GUI_BUTTONS.back(player));
 
         fillBackground(inventory);
         player.openInventory(inventory);
@@ -506,8 +505,7 @@ public class EditorManager implements Listener {
                 plugin.sendMessage(
                     player,
                     next.contains(click.material()) ? "editor-added" : "editor-removed",
-                    "{value}",
-                    MaterialTypes.displayName(click.material())
+                    materialPlaceholders(MaterialTypes.displayName(click.material()), click.material())
                 );
                 MaterialChooserMenus.open(player, holder.request().withSelectedMaterials(next));
             }
@@ -566,8 +564,7 @@ public class EditorManager implements Listener {
                 plugin.sendMessage(
                     player,
                     next.contains(click.entityType()) ? "editor-added" : "editor-removed",
-                    "{value}",
-                    MobTypes.displayName(click.entityType())
+                    materialPlaceholders(MobTypes.displayName(click.entityType()), MobTypes.spawnEgg(click.entityType()))
                 );
                 MobChooserMenus.open(player, holder.request().withSelectedTypes(next));
             }
@@ -832,38 +829,61 @@ public class EditorManager implements Listener {
             .toList();
     }
 
-    private ItemStack createToggleItem(Material material, String label, boolean enabled, String... lore) {
-        String state = enabled ? "{good}" + label + ": ON" : "{bad}" + label + ": OFF";
+    private ItemStack createButton(Player viewer, Material material, String label, String clickAction, String... information) {
+        return EditorItemFactory.button(
+            viewer,
+            material,
+            FoStyle.THEME,
+            label,
+            renderForViewer(viewer, List.of(information)),
+            clickAction
+        );
+    }
+
+    private ItemStack createToggleItem(Player player, Material material, String label, boolean enabled, String... lore) {
         List<String> lines = new ArrayList<>();
-        lines.add("{white}Current: " + formatState(enabled));
-        lines.add("");
+        lines.add("State: " + formatState(enabled));
         lines.addAll(List.of(lore));
-        lines.add("");
-        lines.add("{white}Click to toggle.");
-        return createItem(enabled ? Material.LIME_DYE : Material.RED_DYE, state, lines.toArray(new String[0]));
+        return EditorItemFactory.button(
+            player,
+            enabled ? Material.LIME_DYE : Material.RED_DYE,
+            enabled ? FoStyle.GOOD : FoStyle.BAD,
+            label,
+            renderForViewer(player, lines),
+            "toggle"
+        );
     }
 
-    private ItemStack createCycleItem(Material material, String label, String currentValue, List<CycleOption> options) {
-        List<String> lines = new ArrayList<>(CycleOptions.lore(plugin.getMessages(), currentValue, options));
-        lines.add("");
-        lines.add("{white}Click to cycle.");
-        return createItem(material, "{theme}" + label, lines.toArray(new String[0]));
+    private ItemStack createCycleItem(Player player, Material material, String label, String currentValue, List<CycleOption> options) {
+        return EditorItemFactory.button(
+            player,
+            material,
+            FoStyle.THEME,
+            label,
+            CycleOptions.information(plugin.getMessages(), currentValue, options),
+            "cycle"
+        );
     }
 
-    private ItemStack createItem(Material material, String name, String... lore) {
-        ItemStack item = new ItemStack(material);
-        ItemMeta meta = item.getItemMeta();
-        if (meta != null) {
-            meta.setDisplayName(plugin.format(name));
-            List<String> renderedLore = new ArrayList<>();
-            for (String line : lore) {
-                renderedLore.add(plugin.format(line));
-            }
-            meta.setLore(renderedLore);
-            meta.addItemFlags(ItemFlag.HIDE_ATTRIBUTES, ItemFlag.HIDE_ENCHANTS);
-            item.setItemMeta(meta);
-        }
-        return item;
+    private ItemStack createInfoItem(Player viewer, Material material, String name, String... lore) {
+        return EditorItemFactory.item(viewer, material,
+            plugin.getMessages().renderTemplateForViewer(viewer, name, Map.of()),
+            renderForViewer(viewer, List.of(lore)));
+    }
+
+    private List<String> renderForViewer(Player viewer, List<String> lines) {
+        return lines.stream()
+            .map(line -> plugin.getMessages().renderTemplateForViewer(viewer, line, Map.of()))
+            .toList();
+    }
+
+    private Map<String, String> materialPlaceholders(String displayName, Material spriteMaterial) {
+        Map<String, String> placeholders = new LinkedHashMap<>(
+            FoMessageService.materialPlaceholders(displayName, spriteMaterial)
+        );
+        // Preserve older messages.yml files that still use the combined value.
+        placeholders.put("value", placeholders.get("material_sprite") + placeholders.get("material"));
+        return Map.copyOf(placeholders);
     }
 
     private void fillBackground(Inventory inventory) {
@@ -875,7 +895,7 @@ public class EditorManager implements Listener {
     }
 
     private String formatState(boolean enabled) {
-        return enabled ? "{good}Enabled" : "{bad}Disabled";
+        return enabled ? "{good}ON" : "{bad}OFF";
     }
 
     private String normalizeKey(String value) {
@@ -903,8 +923,8 @@ public class EditorManager implements Listener {
             "mob-kills",
             "&8ᴍᴏʙ ᴋɪʟʟꜱ",
             "disabled-mobs",
-            Material.ZOMBIE_HEAD,
-            Material.CREEPER_HEAD,
+            Material.ZOMBIE_SPAWN_EGG,
+            Material.CREEPER_SPAWN_EGG,
             true
         ),
         FISHING(

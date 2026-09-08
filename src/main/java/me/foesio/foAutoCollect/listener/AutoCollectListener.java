@@ -1,5 +1,6 @@
 package me.foesio.foAutoCollect.listener;
 
+import me.foesio.core.dialog.DialogIcons;
 import me.foesio.core.inventory.InventoryDepositResult;
 import me.foesio.core.inventory.InventoryDepositResultMode;
 import me.foesio.core.inventory.InventoryDepositService;
@@ -40,6 +41,7 @@ import org.bukkit.scheduler.BukkitTask;
 import net.md_5.bungee.api.ChatMessageType;
 import net.md_5.bungee.api.chat.TextComponent;
 import org.bukkit.projectiles.ProjectileSource;
+import net.kyori.adventure.text.Component;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -999,10 +1001,20 @@ public class AutoCollectListener implements Listener {
 
     private void showInventoryFullFeedback(Player player) {
         if (plugin.isFullInventoryActionbarEnabled()) {
-            player.spigot().sendMessage(
-                ChatMessageType.ACTION_BAR,
-                TextComponent.fromLegacyText(plugin.getMessage("inventory-full-actionbar"))
+            Component actionBar = plugin.getMessages().renderComponent(
+                player,
+                "messages.inventory-full-actionbar",
+                "{bad}Inventory full.",
+                Map.of()
             );
+            try {
+                player.getClass().getMethod("sendActionBar", Component.class).invoke(player, actionBar);
+            } catch (ReflectiveOperationException | LinkageError exception) {
+                player.spigot().sendMessage(
+                    ChatMessageType.ACTION_BAR,
+                    TextComponent.fromLegacyText(DialogIcons.fallbackText(actionBar))
+                );
+            }
         }
         plugin.getSounds().play(player, "full-inventory");
     }

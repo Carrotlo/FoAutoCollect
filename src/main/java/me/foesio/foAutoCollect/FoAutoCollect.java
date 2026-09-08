@@ -99,10 +99,10 @@ public final class FoAutoCollect extends JavaPlugin {
         getConfig().set("gui-buttons", null);
         getConfig().set("update-checker", null);
         saveConfig();
-        reloadMessages();
         core = FoPluginCore.create(this);
         inventoryDepositService = core.inventoryDeposits();
         core.warnIfNativeDialogsUnavailable();
+        reloadMessages();
         sounds = core.createSounds(soundMigrations());
         editorSounds = FoEditorSounds.create(sounds);
         reloadSettings();
@@ -684,6 +684,10 @@ public final class FoAutoCollect extends JavaPlugin {
         messages.send(sender, "messages." + key, "{prefix} {bad}Missing message: " + key, placeholders(placeholders));
     }
 
+    public void sendMessage(CommandSender sender, String key, Map<String, String> placeholders) {
+        messages.send(sender, "messages." + key, "{prefix} {bad}Missing message: " + key, placeholders);
+    }
+
     public String getMessage(String key, String... placeholders) {
         return messages.render("messages." + key, "{prefix} {bad}Missing message: " + key, placeholders(placeholders));
     }
@@ -706,7 +710,89 @@ public final class FoAutoCollect extends JavaPlugin {
         boolean messagePrefixWasSet = messages.config().isSet("tokens.prefix");
         applyBundledMessageDefaults();
         migrateLegacyConfigPrefix(messagePrefixWasSet);
+        messages.migrateToVersion(core.migrations(), 1, config -> {
+            boolean changed = migrateSpriteTokens(config);
+            changed |= migrateSpriteFeedbackTokens(config);
+            changed |= migrateMaterialPlaceholders(config);
+            return changed;
+        });
         messages.save();
+    }
+
+    private boolean migrateSpriteTokens(FileConfiguration config) {
+        boolean changed = prependToken(config, "tokens.prefix", ":hopper:");
+        changed |= insertAfterToken(config, "messages.toggle-enabled", "{prefix}", ":lime_dye:");
+        changed |= insertAfterToken(config, "messages.toggle-disabled", "{prefix}", ":red_dye:");
+        changed |= insertAfterToken(config, "messages.toggle-forced", "{prefix}", ":lime_dye:");
+        changed |= insertAfterToken(config, "messages.status-enabled", "{prefix}", ":lime_dye:");
+        changed |= insertAfterToken(config, "messages.status-disabled", "{prefix}", ":red_dye:");
+        changed |= insertAfterToken(config, "messages.admin-set-enabled", "{prefix}", ":lime_dye:");
+        changed |= insertAfterToken(config, "messages.admin-set-disabled", "{prefix}", ":red_dye:");
+        changed |= insertAfterToken(config, "messages.admin-force-enabled", "{prefix}", ":lime_dye:");
+        changed |= insertAfterToken(config, "messages.admin-force-disabled", "{prefix}", ":red_dye:");
+        changed |= insertAfterToken(config, "messages.editor-saved", "{prefix}", ":emerald:");
+        changed |= insertAfterToken(config, "messages.editor-added", "{prefix}", ":emerald:");
+        changed |= insertAfterToken(config, "messages.editor-removed", "{prefix}", ":redstone:");
+        changed |= prependToken(config, "messages.inventory-full-actionbar", ":chest:");
+        return changed;
+    }
+
+    private boolean migrateSpriteFeedbackTokens(FileConfiguration config) {
+        boolean changed = insertAfterToken(config, "messages.no-permission", "{prefix}", ":redstone:");
+        changed |= insertAfterToken(config, "messages.players-only", "{prefix}", ":redstone:");
+        changed |= insertAfterToken(config, "messages.unknown-subcommand", "{prefix}", ":redstone:");
+        changed |= insertAfterToken(config, "messages.help-header", "{prefix}", ":book:");
+        changed |= insertAfterToken(config, "messages.reloaded", "{prefix}", ":emerald:");
+        changed |= insertAfterToken(config, "messages.player-not-found", "{prefix}", ":redstone:");
+        changed |= insertAfterToken(config, "messages.admin-force-state", "{prefix}", ":book:");
+        changed |= insertAfterToken(config, "messages.admin-force-usage", "{prefix}", ":book:");
+        changed |= insertAfterToken(config, "messages.invalid-state", "{prefix}", ":redstone:");
+        changed |= insertAfterToken(config, "messages.invalid-force-state", "{prefix}", ":redstone:");
+        changed |= insertAfterToken(config, "messages.prompt-cancelled", "{prefix}", ":redstone:");
+        changed |= insertAfterToken(config, "messages.command-missing", "{prefix}", ":redstone:");
+        changed |= insertAfterToken(config, "messages.command-failed", "{prefix}", ":redstone:");
+        changed |= insertAfterToken(config, "admin.editor-opened", "{prefix}", ":book:");
+        return changed;
+    }
+
+    private boolean migrateMaterialPlaceholders(FileConfiguration config) {
+        boolean changed = false;
+        for (String path : new String[]{"messages.editor-added", "messages.editor-removed"}) {
+            String current = config.getString(path);
+            if (current == null || !current.contains("{value}")
+                    || current.contains("%material%") || current.contains("%material_sprite%")) {
+                continue;
+            }
+            config.set(path, current.replace("{value}", "%material_sprite%%material%"));
+            changed = true;
+        }
+        return changed;
+    }
+
+    private boolean prependToken(FileConfiguration config, String path, String token) {
+        String current = config.getString(path);
+        if (current == null || current.contains(token)) {
+            return false;
+        }
+        config.set(path, token + " " + current);
+        return true;
+    }
+
+    private boolean insertAfterToken(FileConfiguration config, String path, String anchor, String token) {
+        String current = config.getString(path);
+        if (current == null || current.contains(token)) {
+            return false;
+        }
+        int anchorEnd = current.indexOf(anchor);
+        if (anchorEnd < 0) {
+            config.set(path, token + " " + current);
+            return true;
+        }
+        anchorEnd += anchor.length();
+        String suffix = current.substring(anchorEnd);
+        String separator = suffix.startsWith(" ") ? "" : " ";
+        config.set(path, current.substring(0, anchorEnd) + token + separator + suffix);
+        return true;
     }
 
     private void applyBundledMessageDefaults() {
