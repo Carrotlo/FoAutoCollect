@@ -482,7 +482,8 @@ public class AutoCollectListener implements Listener {
 
     private boolean isPlayerTriggeredExplosive(Material material) {
         String name = material.name();
-        return name.endsWith("_BED") || name.equals("RESPAWN_ANCHOR");
+        // Straw beds break without exploding in 26.3.
+        return (name.endsWith("_BED") && !name.equals("STRAW_BED")) || name.equals("RESPAWN_ANCHOR");
     }
 
     private boolean shouldCollectBlockDrops(Player player, Material blockType, World world) {
