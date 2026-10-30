@@ -89,8 +89,7 @@ public final class AutoCollectAdminCommand {
 
                 Player targetPlayer = target.get();
                 boolean enabled = state.get();
-                plugin.getToggleStore().setEnabled(targetPlayer.getUniqueId(), enabled);
-                plugin.refreshCollectionListeners();
+                plugin.changeSessionPreference(targetPlayer, enabled);
                 plugin.sendMessage(context.sender(), enabled ? "admin-set-enabled" : "admin-set-disabled", "{player}", targetPlayer.getName());
                 plugin.sendMessage(targetPlayer, enabled ? "toggle-enabled" : "toggle-disabled");
                 return true;

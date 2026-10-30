@@ -2,6 +2,8 @@ package me.foesio.foAutoCollect.event;
 
 import java.util.ArrayList;
 import java.util.List;
+import me.foesio.foAutoCollect.api.CollectionSource;
+import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.entity.Player;
 import org.bukkit.event.Event;
@@ -14,11 +16,18 @@ public final class AutoCollectItemsCollectedEvent extends Event {
     private final Player player;
     private final List<ItemStack> items;
     private final Location location;
+    private final CollectionSource source;
 
     public AutoCollectItemsCollectedEvent(Player player, List<ItemStack> items, Location location) {
+        this(player, items, location, CollectionSource.UNKNOWN);
+    }
+
+    public AutoCollectItemsCollectedEvent(Player player, List<ItemStack> items, Location location, CollectionSource source) {
+        super(!Bukkit.isPrimaryThread());
         this.player = player;
         this.items = copyItems(items);
         this.location = location == null ? null : location.clone();
+        this.source = source == null ? CollectionSource.UNKNOWN : source;
     }
 
     public Player getPlayer() {
@@ -31,6 +40,11 @@ public final class AutoCollectItemsCollectedEvent extends Event {
 
     public Location getLocation() {
         return location == null ? null : location.clone();
+    }
+
+    /** Gameplay path that supplied the accepted items. */
+    public CollectionSource getSource() {
+        return source;
     }
 
     @Override

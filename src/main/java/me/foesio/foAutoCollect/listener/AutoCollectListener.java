@@ -6,7 +6,11 @@ import me.foesio.core.inventory.InventoryDepositResultMode;
 import me.foesio.core.inventory.InventoryDepositService;
 import me.foesio.core.inventory.OverflowPolicy;
 import me.foesio.foAutoCollect.FoAutoCollect;
+import me.foesio.foAutoCollect.api.CollectionSource;
+import me.foesio.foAutoCollect.api.RewardOfferResult;
+import me.foesio.foAutoCollect.event.AutoCollectExperienceCollectedEvent;
 import me.foesio.foAutoCollect.event.AutoCollectItemsCollectedEvent;
+import me.foesio.foAutoCollect.event.AutoCollectPreCollectEvent;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.World;
@@ -56,7 +60,6 @@ import java.util.function.Supplier;
 
 public class AutoCollectListener implements Listener {
     private static final long BLOCK_DROP_BATCH_DELAY_TICKS = 4L;
-    private static final long COLLECTED_EVENT_LISTENER_CACHE_MILLIS = 1_000L;
     private static final long PICKUP_SOUND_COOLDOWN_MILLIS = 80L;
 
     private final FoAutoCollect plugin;
@@ -66,8 +69,6 @@ public class AutoCollectListener implements Listener {
     private final Map<UUID, Long> pickupSoundCooldowns = new HashMap<>();
     private final List<ExplosionSource> recentExplosionSources = new ArrayList<>();
     private final List<ExplosionCollectContext> recentExplosionCollections = new ArrayList<>();
-    private long collectedEventListenerCacheExpiresAt;
-    private boolean collectedEventListenersPresent;
 
     public AutoCollectListener(FoAutoCollect plugin) {
         this.plugin = plugin;
@@ -83,16 +84,27 @@ public class AutoCollectListener implements Listener {
     }
 
     public boolean collectExternalReward(Player player, ItemStack itemStack, Location location) {
-        if (player == null || itemStack == null || itemStack.getType() == Material.AIR) {
-            return false;
-        }
+        return offerExternalReward(player, itemStack, location, CollectionSource.FO_DROPS).handled();
+    }
 
-        InventoryDepositResult result = depositItem(player, itemStack, location);
-        if (!acceptDeposit(player, result)) {
-            return false;
+    public RewardOfferResult offerExternalReward(Player player, ItemStack itemStack, Location location, CollectionSource source) {
+        source = source == null ? CollectionSource.UNKNOWN : source;
+        if (player == null || !player.isOnline() || !plugin.isAutoCollectActive(player) || !isDepositable(itemStack)) {
+            return new RewardOfferResult(RewardOfferResult.Status.DECLINED, 0, 0);
         }
-        callCollectedEvent(player, result);
-        return true;
+        Location dropLocation = location == null ? player.getLocation() : location.clone();
+        if (!allowCollection(player, List.of(itemStack), dropLocation, source)) {
+            return new RewardOfferResult(RewardOfferResult.Status.CANCELLED, 0, 0);
+        }
+        InventoryDepositResult result = inventoryDeposits.deposit(
+            player, itemStack.clone(), dropLocation, overflowPolicy(), InventoryDepositResultMode.WITH_ACCEPTED_ITEMS
+        );
+        if (!acceptDeposit(player, result)) {
+            return new RewardOfferResult(RewardOfferResult.Status.BLOCKED, 0, 0);
+        }
+        callCollectedEvent(player, result, source);
+        return new RewardOfferResult(RewardOfferResult.Status.HANDLED,
+            result.acceptedAmount(), result.overflowAmount());
     }
 
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
@@ -107,6 +119,7 @@ public class AutoCollectListener implements Listener {
             if (experience > 0) {
                 event.setExpToDrop(0);
                 player.giveExp(experience);
+                callExperienceEvent(player, experience, event.getPlayer().getLocation(), CollectionSource.FISHING);
             }
         }
 
@@ -122,13 +135,17 @@ public class AutoCollectListener implements Listener {
             return;
         }
 
+        if (!allowCollection(player, List.of(stack), item.getLocation(), CollectionSource.FISHING)) {
+            return;
+        }
+
         InventoryDepositResult result = depositItem(player, stack, item.getLocation());
         if (!acceptDeposit(player, result)) {
             return;
         }
 
         item.remove();
-        callCollectedEvent(player, result);
+        callCollectedEvent(player, result, CollectionSource.FISHING);
     }
 
     @EventHandler(priority = EventPriority.LOWEST, ignoreCancelled = true)
@@ -166,6 +183,10 @@ public class AutoCollectListener implements Listener {
             return;
         }
 
+        if (!allowCollection(player, List.of(stack), event.getItemDrop().getLocation(), CollectionSource.SHEARING)) {
+            return;
+        }
+
         InventoryDepositResult result = depositItem(player, stack, event.getItemDrop().getLocation());
         if (!acceptDeposit(player, result)) {
             return;
@@ -173,7 +194,7 @@ public class AutoCollectListener implements Listener {
 
         event.setCancelled(true);
         event.getItemDrop().remove();
-        callCollectedEvent(player, result);
+        callCollectedEvent(player, result, CollectionSource.SHEARING);
     }
 
     @EventHandler(priority = EventPriority.LOWEST, ignoreCancelled = true)
@@ -243,13 +264,17 @@ public class AutoCollectListener implements Listener {
             return;
         }
 
+        if (!allowCollection(player, List.of(stack), event.getLocation(), CollectionSource.EXPLOSION)) {
+            return;
+        }
+
         InventoryDepositResult result = depositItem(player, stack, event.getLocation());
         if (!acceptDeposit(player, result)) {
             return;
         }
 
         event.setCancelled(true);
-        callCollectedEvent(player, result);
+        callCollectedEvent(player, result, CollectionSource.EXPLOSION);
     }
 
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
@@ -271,6 +296,7 @@ public class AutoCollectListener implements Listener {
 
         event.setExpToDrop(0);
         player.giveExp(experience);
+        callExperienceEvent(player, experience, event.getBlock().getLocation(), CollectionSource.BLOCK_BREAK);
     }
 
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
@@ -292,12 +318,16 @@ public class AutoCollectListener implements Listener {
             return;
         }
 
+        if (!allowCollection(player, stacks, centered(blockState.getLocation()), CollectionSource.BLOCK_BREAK)) {
+            return;
+        }
+
         if (shouldDepositBlockDropsImmediately()) {
             InventoryDepositResult result = depositBlockDrops(player, stacks, blockState);
             if (!acceptDeposit(player, result)) {
                 return;
             }
-            callCollectedEvent(player, result);
+            callCollectedEvent(player, result, CollectionSource.BLOCK_BREAK);
         } else {
             enqueueBlockDrops(player, stacks, blockState);
         }
@@ -321,18 +351,22 @@ public class AutoCollectListener implements Listener {
             if (experience > 0) {
                 event.setDroppedExp(0);
                 player.giveExp(experience);
+                callExperienceEvent(player, experience, event.getEntity().getLocation(), CollectionSource.MOB_KILL);
             }
         }
 
         if (plugin.isMobDropCollectionEnabled() && !event.getDrops().isEmpty()) {
             List<ItemStack> stacks = new ArrayList<>(event.getDrops());
+            if (!allowCollection(player, stacks, event.getEntity().getLocation(), CollectionSource.MOB_KILL)) {
+                return;
+            }
             InventoryDepositResult result = depositItems(player, stacks, event.getEntity().getLocation());
             if (!acceptDeposit(player, result)) {
                 return;
             }
 
             event.getDrops().clear();
-            callCollectedEvent(player, result);
+            callCollectedEvent(player, result, CollectionSource.MOB_KILL);
         }
     }
 
@@ -493,7 +527,9 @@ public class AutoCollectListener implements Listener {
     }
 
     private boolean shouldDepositBlockDropsImmediately() {
-        return overflowPolicy() == OverflowPolicy.BLOCK_COLLECTION || hasCollectedEventListeners();
+        return overflowPolicy() == OverflowPolicy.BLOCK_COLLECTION
+            || hasCollectedEventListeners()
+            || hasPreCollectListeners();
     }
 
     private List<ItemStack> collectItemStacks(Collection<Item> items) {
@@ -568,10 +604,27 @@ public class AutoCollectListener implements Listener {
         return !result.blocked();
     }
 
-    private void callCollectedEvent(Player player, InventoryDepositResult result) {
+    private boolean allowCollection(Player player, Collection<ItemStack> items, Location location, CollectionSource source) {
+        if (!hasPreCollectListeners()) {
+            return true;
+        }
+        AutoCollectPreCollectEvent event = new AutoCollectPreCollectEvent(player, new ArrayList<>(items), location, source);
+        plugin.getServer().getPluginManager().callEvent(event);
+        return !event.isCancelled();
+    }
+
+    private void callCollectedEvent(Player player, InventoryDepositResult result, CollectionSource source) {
         if (hasCollectedEventListeners() && !result.acceptedItems().isEmpty()) {
             plugin.getServer().getPluginManager().callEvent(
-                new AutoCollectItemsCollectedEvent(player, result.acceptedItems(), result.location())
+                new AutoCollectItemsCollectedEvent(player, result.acceptedItems(), result.location(), source)
+            );
+        }
+    }
+
+    private void callExperienceEvent(Player player, int amount, Location location, CollectionSource source) {
+        if (amount > 0 && AutoCollectExperienceCollectedEvent.getHandlerList().getRegisteredListeners().length > 0) {
+            plugin.getServer().getPluginManager().callEvent(
+                new AutoCollectExperienceCollectedEvent(player, amount, location, source)
             );
         }
     }
@@ -581,14 +634,11 @@ public class AutoCollectListener implements Listener {
     }
 
     private boolean hasCollectedEventListeners() {
-        long now = System.currentTimeMillis();
-        if (now < collectedEventListenerCacheExpiresAt) {
-            return collectedEventListenersPresent;
-        }
+        return AutoCollectItemsCollectedEvent.getHandlerList().getRegisteredListeners().length > 0;
+    }
 
-        collectedEventListenersPresent = AutoCollectItemsCollectedEvent.getHandlerList().getRegisteredListeners().length > 0;
-        collectedEventListenerCacheExpiresAt = now + COLLECTED_EVENT_LISTENER_CACHE_MILLIS;
-        return collectedEventListenersPresent;
+    private boolean hasPreCollectListeners() {
+        return AutoCollectPreCollectEvent.getHandlerList().getRegisteredListeners().length > 0;
     }
 
     private InventoryDepositResult depositItemFast(Player player, ItemStack stack, Supplier<Location> overflowLocation) {
@@ -660,12 +710,17 @@ public class AutoCollectListener implements Listener {
             return;
         }
 
+        if (!allowCollection(player, batch.stacks(), location, CollectionSource.BLOCK_BREAK)) {
+            dropOverflow(location, batch.stacks());
+            return;
+        }
+
         InventoryDepositResult result = depositItems(player, batch.stacks(), location);
         if (!acceptDeposit(player, result)) {
             dropOverflow(location, batch.stacks());
             return;
         }
-        callCollectedEvent(player, result);
+        callCollectedEvent(player, result, CollectionSource.BLOCK_BREAK);
     }
 
     private InventoryDepositResult depositItemsFast(Player player, Collection<ItemStack> stacks, Supplier<Location> overflowLocation) {

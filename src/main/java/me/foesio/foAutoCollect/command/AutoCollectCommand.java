@@ -45,8 +45,7 @@ public class AutoCollectCommand implements CommandExecutor, TabCompleter {
             }
             if (subcommand.equals("on")) {
                 boolean wasEnabled = plugin.isAutoCollectActive(player);
-                plugin.getToggleStore().setEnabled(player.getUniqueId(), true);
-                plugin.refreshCollectionListeners();
+                plugin.changeSessionPreference(player, true);
                 if (!wasEnabled) {
                     playToggleSound(player, true);
                 }
@@ -55,8 +54,7 @@ public class AutoCollectCommand implements CommandExecutor, TabCompleter {
             }
             if (subcommand.equals("off")) {
                 boolean wasEnabled = plugin.isAutoCollectActive(player);
-                plugin.getToggleStore().setEnabled(player.getUniqueId(), false);
-                plugin.refreshCollectionListeners();
+                plugin.changeSessionPreference(player, false);
                 if (wasEnabled) {
                     playToggleSound(player, false);
                 }
@@ -70,8 +68,7 @@ public class AutoCollectCommand implements CommandExecutor, TabCompleter {
         }
 
         boolean enabled = !plugin.getToggleStore().isEnabled(player.getUniqueId());
-        plugin.getToggleStore().setEnabled(player.getUniqueId(), enabled);
-        plugin.refreshCollectionListeners();
+        plugin.changeSessionPreference(player, enabled);
         playToggleSound(player, enabled);
         plugin.sendMessage(player, enabled ? "toggle-enabled" : "toggle-disabled");
         return true;

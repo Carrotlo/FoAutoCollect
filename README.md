@@ -63,7 +63,7 @@ Main config areas: `force-enabled`, `default-enabled`, `native-dialogs`, `auto-c
 <details>
 <summary><strong>Developer API</strong></summary>
 
-`AutoCollectItemsCollectedEvent` fires after an item batch is collected and provides cloned items, the receiving player, and the source location.
+`AutoCollectItemsCollectedEvent` fires after items reach a player's inventory and provides cloned items, the receiving player, the source location, and a collection source. FoAutoCollect also exposes a player-state service, an external reward offer API, a pre-collection decision event, and an XP collection event. See the [public API types](src/main/java/me/foesio/foAutoCollect/api) and [events](src/main/java/me/foesio/foAutoCollect/event) for the contracts.
 
 ~~~java
 @EventHandler

@@ -34,6 +34,17 @@ import me.foesio.foAutoCollect.editor.EditorManager;
 import me.foesio.foAutoCollect.integration.FoDropsRewardBridge;
 import me.foesio.foAutoCollect.listener.AutoCollectListener;
 import me.foesio.foAutoCollect.storage.ToggleStore;
+import me.foesio.foAutoCollect.api.AutoCollectService;
+import me.foesio.foAutoCollect.api.CollectionSource;
+import me.foesio.foAutoCollect.api.PreferenceChangeResult;
+import me.foesio.foAutoCollect.api.RewardOfferResult;
+import me.foesio.foAutoCollect.event.AutoCollectPreferenceChangedEvent;
+import java.util.Optional;
+import java.util.UUID;
+import org.bukkit.Bukkit;
+import org.bukkit.Location;
+import org.bukkit.inventory.ItemStack;
+import org.bukkit.plugin.ServicePriority;
 import org.bukkit.Material;
 import org.bukkit.SoundCategory;
 import org.bukkit.World;
@@ -45,7 +56,7 @@ import org.bukkit.entity.Player;
 import org.bukkit.event.HandlerList;
 import org.bukkit.plugin.java.JavaPlugin;
 
-public final class FoAutoCollect extends JavaPlugin {
+public final class FoAutoCollect extends JavaPlugin implements AutoCollectService {
     private static final String MODRINTH_PROJECT_ID = "foautocollect";
     private static final int BSTATS_PLUGIN_ID = 32375;
 
@@ -138,11 +149,13 @@ public final class FoAutoCollect extends JavaPlugin {
         AutoCollectAdminCommand.register(this, editorManager, messages, reloadRegistry, updates, adminSounds);
 
         registerPlaceholderHook();
+        getServer().getServicesManager().register(AutoCollectService.class, this, this, ServicePriority.Normal);
         startMetrics();
     }
 
     @Override
     public void onDisable() {
+        getServer().getServicesManager().unregister(AutoCollectService.class, this);
         if (autoCollectListener != null) {
             autoCollectListener.clearRuntimeState();
         }
@@ -205,6 +218,66 @@ public final class FoAutoCollect extends JavaPlugin {
             return defaultEnabled;
         }
         return toggleStore.isEnabled(player.getUniqueId());
+    }
+
+    @Override
+    public boolean isActive(Player player) {
+        requireMainThread();
+        return player != null && isEnabled() && isAutoCollectActive(player);
+    }
+
+    @Override
+    public Optional<Boolean> getSessionPreference(UUID playerId) {
+        requireMainThread();
+        return !isEnabled() || playerId == null || toggleStore == null
+            ? Optional.empty() : toggleStore.getOverride(playerId);
+    }
+
+    @Override
+    public PreferenceChangeResult requestPreference(Player player, boolean enabled) {
+        requireMainThread();
+        if (!isEnabled()) {
+            throw new IllegalStateException("FoAutoCollect is disabled");
+        }
+        if (player == null || !player.isOnline()) {
+            throw new IllegalArgumentException("An online player is required");
+        }
+        if (forceEnabled) {
+            return PreferenceChangeResult.FORCED;
+        }
+        return changeSessionPreference(player, enabled)
+            ? PreferenceChangeResult.CHANGED : PreferenceChangeResult.UNCHANGED;
+    }
+
+    /** Shared player/admin mutation path. Admin changes may update the stored preference during force mode. */
+    public boolean changeSessionPreference(Player player, boolean enabled) {
+        requireMainThread();
+        Optional<Boolean> previous = toggleStore.getOverride(player.getUniqueId());
+        if (previous.isPresent() && previous.get() == enabled) {
+            return false;
+        }
+        boolean wasActive = isAutoCollectActive(player);
+        toggleStore.setEnabled(player.getUniqueId(), enabled);
+        refreshCollectionListeners();
+        getServer().getPluginManager().callEvent(new AutoCollectPreferenceChangedEvent(
+            player, previous, enabled, wasActive, isAutoCollectActive(player)
+        ));
+        return true;
+    }
+
+    @Override
+    public RewardOfferResult offerReward(Player player, ItemStack item, Location location) {
+        requireMainThread();
+        if (!isEnabled() || autoCollectListener == null) {
+            return new RewardOfferResult(RewardOfferResult.Status.DECLINED, 0, 0);
+        }
+        return autoCollectListener.offerExternalReward(player, item, location, CollectionSource.EXTERNAL);
+    }
+
+    private void requireMainThread() {
+        if (!Bukkit.isPrimaryThread()) {
+            throw new IllegalStateException("FoAutoCollect API calls require the Bukkit primary thread");
+        }
     }
 
     public boolean isDefaultEnabled() {

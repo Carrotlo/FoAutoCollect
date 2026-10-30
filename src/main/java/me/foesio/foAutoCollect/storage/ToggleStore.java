@@ -4,6 +4,7 @@ import me.foesio.foAutoCollect.FoAutoCollect;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 
 public class ToggleStore {
@@ -28,6 +29,10 @@ public class ToggleStore {
 
     public void setEnabled(UUID playerId, boolean enabled) {
         enabledByPlayer.put(playerId, enabled);
+    }
+
+    public Optional<Boolean> getOverride(UUID playerId) {
+        return Optional.ofNullable(enabledByPlayer.get(playerId));
     }
 
 }
